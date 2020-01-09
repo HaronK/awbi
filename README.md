@@ -1,2 +1,2 @@
 # awbi
-Another World Bytecode Interpreter
+Another World Bytecode Interpreter in Rust
