@@ -1,7 +1,14 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+mod bank;
+mod engine;
+mod file;
+mod intern;
+mod mixer;
+mod parts;
+mod reference;
+mod resource;
+mod serializer;
+mod sfxplayer;
+mod staticres;
+mod system;
+mod video;
+mod vm;
