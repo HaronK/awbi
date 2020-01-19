@@ -1,22 +1,49 @@
 use crate::reference::Ref;
-use crate::serializer::Serializer;
+use crate::serializer::*;
+use crate::file::*;
 use crate::system::*;
+use anyhow::Result;
 
 #[derive(Default)]
 struct MixerChunk {
-    data: Vec<u8>,
-    // len: u16,
+    data: u32,
+    len: u16,
     loop_pos: u16,
     loop_len: u16,
+}
+
+// TODO: use proc_macro
+
+impl AccessorWrap for MixerChunk {
+    fn read(&mut self, stream: &mut File) -> Result<()> {
+        self.data.read(stream)?;
+        self.len.read(stream)?;
+        self.loop_pos.read(stream)?;
+        self.loop_len.read(stream)
+    }
+
+    fn write(&self, stream: &mut File) -> Result<()> {
+        self.data.write(stream)?;
+        self.len.write(stream)?;
+        self.loop_pos.write(stream)?;
+        self.loop_len.write(stream)
+    }
+
+    fn size(&self) -> usize {
+        self.data.size() +
+        self.len.size() +
+        self.loop_pos.size() +
+        self.loop_len.size()
+    }
 }
 
 #[derive(Default)]
 struct MixerChannel {
     active: bool,
     volume: u8,
-    chunk: MixerChunk,
     chunk_pos: u32,
     chunk_inc: u32,
+    chunk: MixerChunk,
 }
 
 impl MixerChannel {
@@ -24,10 +51,38 @@ impl MixerChannel {
         Self {
             active,
             volume,
-            chunk,
             chunk_pos,
             chunk_inc,
+            chunk,
         }
+    }
+}
+
+// TODO: use proc_macro
+
+impl AccessorWrap for MixerChannel {
+    fn read(&mut self, stream: &mut File) -> Result<()> {
+        self.active.read(stream)?;
+        self.volume.read(stream)?;
+        self.chunk_pos.read(stream)?;
+        self.chunk_inc.read(stream)?;
+        self.chunk.read(stream)
+    }
+
+    fn write(&self, stream: &mut File) -> Result<()> {
+        self.active.write(stream)?;
+        self.volume.write(stream)?;
+        self.chunk_pos.write(stream)?;
+        self.chunk_inc.write(stream)?;
+        self.chunk.write(stream)
+    }
+
+    fn size(&self) -> usize {
+        self.active.size() +
+        self.volume.size() +
+        self.chunk_pos.size() +
+        self.chunk_inc.size() +
+        self.chunk.size()
     }
 }
 
@@ -55,15 +110,15 @@ impl Mixer {
 
     pub fn init(&mut self) {
         self.channels = Default::default();
-        self.mutex = self.sys.create_mutex();
+        self.mutex = self.sys.get_mut().create_mutex();
         // self.sys.start_audio(&Mixer::mixCallback, self);
         todo!();
     }
 
     pub fn free(&mut self) {
         self.stop_all();
-        self.sys.stop_audio();
-        self.sys.destroy_mutex(&self.mutex);
+        self.sys.get_mut().stop_audio();
+        self.sys.get_mut().destroy_mutex(&self.mutex);
     }
 
     pub fn play_channel(&mut self, channel: u8, mc: MixerChunk, freq: u16, volume: u8) {
@@ -78,7 +133,7 @@ impl Mixer {
             volume,
             mc,
             0,
-            ((freq as u32) << 8) / self.sys.get_output_sample_rate(),
+            ((freq as u32) << 8) / self.sys.get_mut().get_output_sample_rate(),
         );
         self.channels[channel as usize] = ch;
 
@@ -140,7 +195,7 @@ impl Mixer {
                         p1 + 1
                     }
                 } else {
-                    if p1 == ch.chunk.data.len() - 1 {
+                    if p1 == ch.chunk.len as usize - 1 {
                         // debug(DBG_SND, "Stopping sample on channel %d", i);
                         ch.active = false;
                         break;
@@ -150,8 +205,8 @@ impl Mixer {
                 };
 
                 // interpolate
-                let b1 = ch.chunk.data[p1] as u32;
-                let b2 = ch.chunk.data[p2] as u32;
+                let b1 = get_byte(ch.chunk.data, p1) as u32;
+                let b2 = get_byte(ch.chunk.data, p2) as u32;
                 let ilc = ch.chunk_pos & 0xFF;
                 let b = ((b1 * (0xFF - ilc) + b2 * ilc) >> 8) * (ch.volume as u32) / 0x40; //0x40=64
 
@@ -163,29 +218,24 @@ impl Mixer {
         // Convert signed 8-bit PCM to unsigned 8-bit PCM. The
         // current version of SDL hangs when using signed 8-bit
         // PCM in combination with the PulseAudio driver.
-        buf.iter().map(|v| (v + 128) as u8).collect()
+        buf.iter().map(|v| (*v as i16 + 128) as u8).collect()
     }
 
     pub fn mix_callback(_param: &[u8], _buf: &[u8]) {}
 
-    pub fn save_or_load(&mut self, _ser: &mut Serializer) {
-		self.sys.lock_mutex(&self.mutex);
-		for _ch in &self.channels {
-			// let mut entries = [
-			// 	SE_INT(&ch->active, Serializer::SES_BOOL, VER(2)),
-			// 	SE_INT(&ch->volume, Serializer::SES_INT8, VER(2)),
-			// 	SE_INT(&ch->chunkPos, Serializer::SES_INT32, VER(2)),
-			// 	SE_INT(&ch->chunkInc, Serializer::SES_INT32, VER(2)),
-			// 	SE_PTR(&ch->chunk.data, VER(2)),
-			// 	SE_INT(&ch->chunk.len, Serializer::SES_INT16, VER(2)),
-			// 	SE_INT(&ch->chunk.loopPos, Serializer::SES_INT16, VER(2)),
-			// 	SE_INT(&ch->chunk.loopLen, Serializer::SES_INT16, VER(2)),
-			// ];
-            // ser.save_or_load_entries(&mut entries);
-            todo!();
+    pub fn save_or_load(&mut self, ser: &mut Serializer) {
+		self.sys.get_mut().lock_mutex(&self.mutex);
+
+        for ch in &mut self.channels {
+            ser.save_or_load_entries(ch, Ver(2));
 		}
-		self.sys.unlock_mutex(&self.mutex);
+
+        self.sys.get_mut().unlock_mutex(&self.mutex);
 	}
+}
+
+fn get_byte(val: u32, idx: usize) -> u8 {
+    val.to_ne_bytes()[idx]
 }
 
 fn add_clamp(a: i32, b: i32) -> i8 {

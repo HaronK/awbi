@@ -69,13 +69,13 @@ impl MutexStack {
             sys,
             mutex: mutex.to_vec(),
         };
-        res.sys.lock_mutex(&res.mutex);
+        res.sys.get_mut().lock_mutex(&res.mutex);
         res
     }
 }
 
 impl Drop for MutexStack {
     fn drop(&mut self) {
-        self.sys.unlock_mutex(&self.mutex);
+        self.sys.get_mut().unlock_mutex(&self.mutex);
     }
 }
