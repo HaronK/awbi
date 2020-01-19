@@ -1,6 +1,6 @@
+use crate::file::*;
 use crate::reference::Ref;
 use crate::serializer::*;
-use crate::file::*;
 use crate::system::*;
 use anyhow::Result;
 
@@ -30,10 +30,7 @@ impl AccessorWrap for MixerChunk {
     }
 
     fn size(&self) -> usize {
-        self.data.size() +
-        self.len.size() +
-        self.loop_pos.size() +
-        self.loop_len.size()
+        self.data.size() + self.len.size() + self.loop_pos.size() + self.loop_len.size()
     }
 }
 
@@ -78,11 +75,11 @@ impl AccessorWrap for MixerChannel {
     }
 
     fn size(&self) -> usize {
-        self.active.size() +
-        self.volume.size() +
-        self.chunk_pos.size() +
-        self.chunk_inc.size() +
-        self.chunk.size()
+        self.active.size()
+            + self.volume.size()
+            + self.chunk_pos.size()
+            + self.chunk_inc.size()
+            + self.chunk.size()
     }
 }
 
@@ -90,7 +87,7 @@ const AUDIO_NUM_CHANNELS: usize = 4;
 
 // #[derive(Default)]
 pub struct Mixer {
-    sys: Ref<Box<dyn System>>,
+    sys: SystemRef,
     mutex: Vec<u8>,
 
     // Since the virtual machine and SDL are running simultaneously in two different threads
@@ -100,7 +97,7 @@ pub struct Mixer {
 }
 
 impl Mixer {
-    pub fn new(sys: Ref<Box<dyn System>>) -> Self {
+    pub fn new(sys: SystemRef) -> Self {
         Self {
             sys,
             mutex: Vec::new(),
@@ -160,9 +157,7 @@ impl Mixer {
         // debug(DBG_SND, "Mixer::stopAll()");
 
         let _ = MutexStack::new(self.sys.clone(), &self.mutex);
-        for ch in &mut self.channels {
-            ch.active = false;
-        }
+        self.channels.iter_mut().for_each(|ch| ch.active = false);
     }
 
     // This is SDL callback. Called in order to populate the buf with len bytes.
@@ -224,14 +219,14 @@ impl Mixer {
     pub fn mix_callback(_param: &[u8], _buf: &[u8]) {}
 
     pub fn save_or_load(&mut self, ser: &mut Serializer) {
-		self.sys.get_mut().lock_mutex(&self.mutex);
+        self.sys.get_mut().lock_mutex(&self.mutex);
 
         for ch in &mut self.channels {
             ser.save_or_load_entries(ch, Ver(2));
-		}
+        }
 
         self.sys.get_mut().unlock_mutex(&self.mutex);
-	}
+    }
 }
 
 fn get_byte(val: u32, idx: usize) -> u8 {

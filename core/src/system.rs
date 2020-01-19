@@ -24,6 +24,8 @@ pub struct PlayerInput {
 type AudioCallback = fn(param: &[u8], stream: &[u8]);
 type TimerCallback = fn(delay: u32, param: &[u8]);
 
+pub type SystemRef = Ref<Box<dyn System>>;
+
 /*
     System is an abstract class so any find of system can be plugged underneath.
 */
@@ -59,12 +61,12 @@ pub trait System {
 }
 
 pub struct MutexStack {
-    sys: Ref<Box<dyn System>>,
+    sys: SystemRef,
     mutex: Vec<u8>,
 }
 
 impl MutexStack {
-    pub fn new(sys: Ref<Box<dyn System>>, mutex: &[u8]) -> Self {
+    pub fn new(sys: SystemRef, mutex: &[u8]) -> Self {
         let mut res = Self {
             sys,
             mutex: mutex.to_vec(),

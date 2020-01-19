@@ -28,17 +28,17 @@ impl MemEntryState {
 // This is a directory entry. When the game starts, it loads memlist.bin and
 // populate and array of MemEntry
 pub struct MemEntry {
-    state: MemEntryState,    // 0x0
-    res_type: ResType, // 0x1
-    buf_offset: u16, // 0x2
-    unk4: u16,           // 0x4, unused
+    state: MemEntryState, // 0x0
+    res_type: ResType,    // 0x1
+    buf_offset: u16,      // 0x2
+    unk4: u16,            // 0x4, unused
     rank_num: u8,         // 0x6
     pub bank_id: u8,      // 0x7
     pub bank_offset: u32, // 0x8 0xA
-    unk_c: u16,          // 0xC, unused
+    unk_c: u16,           // 0xC, unused
     // All resources are packed (for a gain of 28% according to Chahi)
     pub packed_size: u16, // 0xE
-    unk10: u16,          // 0x10, unused
+    unk10: u16,           // 0x10, unused
     pub size: u16,        // 0x12
 }
 
@@ -46,13 +46,12 @@ pub struct MemEntry {
 enum ResType {
     Sound,
     Music,
-    PolyAnim, // full screen video buffer, size=0x7D00 
+    PolyAnim, // full screen video buffer, size=0x7D00
 
-                    // FCS: 0x7D00=32000...but 320x200 = 64000 ??
-                    // Since the game is 16 colors, two pixels palette indices can be stored in one byte
-                    // that's why we can store two pixels palette index in one byte and we only need 320*200/2 bytes for 
-                    // an entire screen.
-
+    // FCS: 0x7D00=32000...but 320x200 = 64000 ??
+    // Since the game is 16 colors, two pixels palette indices can be stored in one byte
+    // that's why we can store two pixels palette index in one byte and we only need 320*200/2 bytes for
+    // an entire screen.
     Palette, // palette (1024=vga + 1024=ega), size=2048
     Bytecode,
     PolyCinematic,
@@ -73,13 +72,19 @@ impl ResType {
     }
 }
 
-const MEM_BLOCK_SIZE: usize = 600 * 1024;   //600kb total memory consumed (not taking into account stack and static heap)
+const MEM_BLOCK_SIZE: usize = 600 * 1024; //600kb total memory consumed (not taking into account stack and static heap)
 
 fn read_bank(data_dir: &str, me: &MemEntry) -> Result<Vec<u8>> {
     let mut bk = Bank::new(data_dir);
-    let res = bk.read(me)
+    let res = bk
+        .read(me)
         .with_context(|| format!("Resource::readBank() unable to unpack entry"))?;
-    ensure!(res.len() == me.size as usize, "[read_bank] Wrong buffer size. Expected {} but was {}", me.size, res.len());
+    ensure!(
+        res.len() == me.size as usize,
+        "[read_bank] Wrong buffer size. Expected {} but was {}",
+        me.size,
+        res.len()
+    );
     Ok(res)
 }
 
@@ -130,24 +135,24 @@ impl AccessorWrap for ResourceStorage {
     }
 
     fn size(&self) -> usize {
-        self.loaded_list.size() +
-        self.current_part_id.size() +
-        self.script_bak_off.size() +
-        self.script_cur_off.size() +
-        self.vid_bak_off.size() +
-        self.vid_cur_off.size() +
-        self.use_seg_video2.size() +
-        self.seg_palette_idx.size() +
-        self.seg_code_idx.size() +
-        self.seg_cinematic_idx.size() +
-        self.seg_video2_idx.size()
+        self.loaded_list.size()
+            + self.current_part_id.size()
+            + self.script_bak_off.size()
+            + self.script_cur_off.size()
+            + self.vid_bak_off.size()
+            + self.vid_cur_off.size()
+            + self.use_seg_video2.size()
+            + self.seg_palette_idx.size()
+            + self.seg_code_idx.size()
+            + self.seg_cinematic_idx.size()
+            + self.seg_video2_idx.size()
     }
 }
 
 pub struct Resource {
-	// Video *video;
-	data_dir: String,
-	mem_entries: Vec<MemEntry>,
+    // Video *video;
+    data_dir: String,
+    mem_entries: Vec<MemEntry>,
     requested_next_part: u16,
     mem_buf: [u8; MEM_BLOCK_SIZE],
     storage: ResourceStorage,
@@ -172,8 +177,9 @@ impl Resource {
     // Read all entries from memlist.bin. Do not load anything in memory,
     // this is just a fast way to access the data later based on their id.
     fn read_entries(&mut self) -> Result<()> {
-        let mut f = File::open("memlist.bin", &self.data_dir, false)
-            .with_context(|| format!("Resource::readEntries() unable to open 'memlist.bin' file"))?;
+        let mut f = File::open("memlist.bin", &self.data_dir, false).with_context(|| {
+            format!("Resource::readEntries() unable to open 'memlist.bin' file")
+        })?;
 
         loop {
             let mem_entry = MemEntry {
@@ -203,7 +209,7 @@ impl Resource {
     fn load_marked_as_needed(&mut self) -> Result<()> {
         loop {
             let mut mem_entry: Option<&mut MemEntry> = None;
-    
+
             // get resource with max rankNum
             let mut max_num = 0;
             for me in &mut self.mem_entries {
@@ -277,15 +283,19 @@ impl Resource {
     }
 
     // Protection screen and cinematic don't need the player and enemies polygon data
-    // so _memList[video2Index] is never loaded for those parts of the game. When 
-    // needed (for action phrases) _memList[video2Index] is always loaded with 0x11 
+    // so _memList[video2Index] is never loaded for those parts of the game. When
+    // needed (for action phrases) _memList[video2Index] is always loaded with 0x11
     // (as seen in memListParts).
     fn setup_part(&mut self, part_id: u16) -> Result<()> {
         if part_id == self.storage.current_part_id {
             return Ok(());
         }
 
-        ensure!(part_id >= GAME_PART_FIRST && part_id <= GAME_PART_LAST, "Resource::setupPart() ec={} invalid partId", part_id);
+        ensure!(
+            part_id >= GAME_PART_FIRST && part_id <= GAME_PART_LAST,
+            "Resource::setupPart() ec={} invalid partId",
+            part_id
+        );
 
         let part_idx = (part_id - GAME_PART_FIRST) as usize;
         let palette_idx = MEM_LIST_PARTS[part_idx][MEMLIST_PART_PALETTE] as usize;
@@ -323,13 +333,13 @@ impl Resource {
         // debug(DBG_RES,"Loaded resource %d (%s) in segPalettes.",paletteIndex,resTypeToString(_memList[paletteIndex].type));
         // debug(DBG_RES,"Loaded resource %d (%s) in segBytecode.",codeIndex,resTypeToString(_memList[codeIndex].type));
         // debug(DBG_RES,"Loaded resource %d (%s) in segCinematic.",videoCinematicIndex,resTypeToString(_memList[videoCinematicIndex].type));
-    
+
         // if video2_idx != MEMLIST_PART_NONE {
         //     debug(DBG_RES,"Loaded resource %d (%s) in _segVideo2.",video2Index,resTypeToString(_memList[video2Index].type));
         // }
 
         self.storage.current_part_id = part_id;
-    
+
         // _scriptCurPtr is changed in this->load();
         self.storage.script_bak_off = self.storage.script_cur_off;
 

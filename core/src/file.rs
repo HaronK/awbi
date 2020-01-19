@@ -52,8 +52,7 @@ impl File {
         match buf.len() {
             1 => self.write_u8(buf[0])?,
             2 => self.write_u16(u16::from_ne_bytes([buf[0], buf[1]]))?,
-            4 => self
-                .write_u32(u32::from_ne_bytes([buf[0], buf[1], buf[2], buf[3]]))?,
+            4 => self.write_u32(u32::from_ne_bytes([buf[0], buf[1], buf[2], buf[3]]))?,
             _ => bail!("[save_int] Unsupported size: {}", buf.len()),
         }
         Ok(())

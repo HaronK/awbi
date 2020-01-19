@@ -191,7 +191,11 @@ impl Serializer {
         self.mode
     }
 
-    pub fn save_or_load_entries(&mut self, accessor: &mut impl AccessorWrap, min_ver: Ver) -> Result<()> {
+    pub fn save_or_load_entries(
+        &mut self,
+        accessor: &mut impl AccessorWrap,
+        min_ver: Ver,
+    ) -> Result<()> {
         // debug(DBG_SER, "Serializer::saveOrLoadEntries() _mode=%d", _mode);
         if self.mode == Mode::Save || self.save_ver >= min_ver && self.save_ver <= CUR_VER {
             accessor.access(self.mode, &mut self.stream)?;
