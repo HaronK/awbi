@@ -2,7 +2,6 @@ use crate::bank::Bank;
 use crate::file::File;
 use crate::parts::*;
 use crate::serializer::*;
-use crate::*;
 use anyhow::{bail, ensure, Context, Result};
 
 #[derive(PartialEq)]
@@ -76,19 +75,18 @@ impl ResType {
 
 const MEM_BLOCK_SIZE: usize = 600 * 1024;   //600kb total memory consumed (not taking into account stack and static heap)
 
-fn read_bank(data_dir: &str, bank_id: u8, bank_offset: u32, packed_size: u16, size: u16) -> Result<Vec<u8>> {
+fn read_bank(data_dir: &str, me: &MemEntry) -> Result<Vec<u8>> {
     let mut bk = Bank::new(data_dir);
-    bk.read(bank_id, bank_offset, packed_size, size)
-        .with_context(|| format!("Resource::readBank() unable to unpack entry"))
+    let res = bk.read(me)
+        .with_context(|| format!("Resource::readBank() unable to unpack entry"))?;
+    ensure!(res.len() == me.size as usize, "[read_bank] Wrong buffer size. Expected {} but was {}", me.size, res.len());
+    Ok(res)
 }
 
-pub struct Resource {
-	// Video *video;
-	data_dir: String,
-	mem_entries: Vec<MemEntry>,
+#[derive(Default)]
+struct ResourceStorage {
+    loaded_list: Vec<u8>,
     current_part_id: u16,
-    requested_next_part: u16,
-    mem_buf: [u8; MEM_BLOCK_SIZE],
     script_bak_off: usize,
     script_cur_off: usize,
     vid_bak_off: usize,
@@ -100,24 +98,70 @@ pub struct Resource {
     seg_video2_idx: usize,
 }
 
+// TODO: use proc_macro
+
+impl AccessorWrap for ResourceStorage {
+    fn read(&mut self, stream: &mut File) -> Result<()> {
+        self.loaded_list.read(stream)?;
+        self.current_part_id.read(stream)?;
+        self.script_bak_off.read(stream)?;
+        self.script_cur_off.read(stream)?;
+        self.vid_bak_off.read(stream)?;
+        self.vid_cur_off.read(stream)?;
+        self.use_seg_video2.read(stream)?;
+        self.seg_palette_idx.read(stream)?;
+        self.seg_code_idx.read(stream)?;
+        self.seg_cinematic_idx.read(stream)?;
+        self.seg_video2_idx.read(stream)
+    }
+
+    fn write(&self, stream: &mut File) -> Result<()> {
+        self.loaded_list.write(stream)?;
+        self.current_part_id.write(stream)?;
+        self.script_bak_off.write(stream)?;
+        self.script_cur_off.write(stream)?;
+        self.vid_bak_off.write(stream)?;
+        self.vid_cur_off.write(stream)?;
+        self.use_seg_video2.write(stream)?;
+        self.seg_palette_idx.write(stream)?;
+        self.seg_code_idx.write(stream)?;
+        self.seg_cinematic_idx.write(stream)?;
+        self.seg_video2_idx.write(stream)
+    }
+
+    fn size(&self) -> usize {
+        self.loaded_list.size() +
+        self.current_part_id.size() +
+        self.script_bak_off.size() +
+        self.script_cur_off.size() +
+        self.vid_bak_off.size() +
+        self.vid_cur_off.size() +
+        self.use_seg_video2.size() +
+        self.seg_palette_idx.size() +
+        self.seg_code_idx.size() +
+        self.seg_cinematic_idx.size() +
+        self.seg_video2_idx.size()
+    }
+}
+
+pub struct Resource {
+	// Video *video;
+	data_dir: String,
+	mem_entries: Vec<MemEntry>,
+    requested_next_part: u16,
+    mem_buf: [u8; MEM_BLOCK_SIZE],
+    storage: ResourceStorage,
+}
+
 impl Resource {
     // Resource(Video *vid, const char *dataDir);
     pub fn new(data_dir: &str) -> Self {
         Self {
             data_dir: data_dir.to_string(),
             mem_entries: Vec::new(),
-            current_part_id: 0,
             requested_next_part: 0,
             mem_buf: [0; MEM_BLOCK_SIZE],
-            script_bak_off: 0,
-            script_cur_off: 0,
-            vid_bak_off: 0,
-            vid_cur_off: 0,
-            use_seg_video2: false,
-            seg_palette_idx: 0,
-            seg_code_idx: 0,
-            seg_cinematic_idx: 0,
-            seg_video2_idx: 0,
+            storage: ResourceStorage::default(),
         }
     }
 
@@ -175,7 +219,7 @@ impl Resource {
                     me.state = MemEntryState::NotNeeded;
                 } else {
                     // debug(DBG_BANK, "Resource::load() bufPos=%X size=%X type=%X pos=%X bankId=%X", loadDestination - _memPtrStart, me->packedSize, me->type, me->bankOffset, me->bankId);
-                    let data = read_bank(&self.data_dir, me.bank_id, me.bank_offset, me.packed_size, me.size)?;
+                    let data = read_bank(&self.data_dir, me)?;
                     if me.res_type == ResType::PolyAnim {
                         // video->copyPagePtr(data);
                         me.state = MemEntryState::NotNeeded;
@@ -184,7 +228,7 @@ impl Resource {
                         let off = me.buf_offset as usize;
                         self.mem_buf[off..off + data.len()].copy_from_slice(&data);
                         me.state = MemEntryState::Loaded;
-                        self.script_cur_off += me.size as usize;
+                        self.storage.script_cur_off += me.size as usize;
                     }
                 }
             } else {
@@ -205,7 +249,7 @@ impl Resource {
             .iter_mut()
             .filter(|me| me.res_type == ResType::PolyAnim)
             .for_each(|me| me.state = MemEntryState::NotNeeded);
-        self.script_cur_off = self.script_bak_off;
+        self.storage.script_cur_off = self.storage.script_bak_off;
     }
 
     fn invalidate_res(&mut self) {
@@ -215,7 +259,7 @@ impl Resource {
         self.mem_entries
             .iter_mut()
             .for_each(|me| me.state = MemEntryState::NotNeeded);
-        self.script_cur_off = 0;
+        self.storage.script_cur_off = 0;
     }
 
     fn load_parts_or_mem_entry(&mut self, resource_id: u16) -> Result<()> {
@@ -237,7 +281,7 @@ impl Resource {
     // needed (for action phrases) _memList[video2Index] is always loaded with 0x11 
     // (as seen in memListParts).
     fn setup_part(&mut self, part_id: u16) -> Result<()> {
-        if part_id == self.current_part_id {
+        if part_id == self.storage.current_part_id {
             return Ok(());
         }
 
@@ -264,14 +308,14 @@ impl Resource {
 
         self.load_marked_as_needed();
 
-        self.seg_palette_idx = palette_idx;
-        self.seg_code_idx = code_idx;
-        self.seg_cinematic_idx = video_cinematic_idx;
+        self.storage.seg_palette_idx = palette_idx;
+        self.storage.seg_code_idx = code_idx;
+        self.storage.seg_cinematic_idx = video_cinematic_idx;
 
         // This is probably a cinematic or a non interactive part of the game.
         // Player and enemy polygons are not needed.
         if video2_idx != MEMLIST_PART_NONE {
-            self.seg_video2_idx = video2_idx;
+            self.storage.seg_video2_idx = video2_idx;
         }
 
         // debug(DBG_RES,"");
@@ -284,24 +328,24 @@ impl Resource {
         //     debug(DBG_RES,"Loaded resource %d (%s) in _segVideo2.",video2Index,resTypeToString(_memList[video2Index].type));
         // }
 
-        self.current_part_id = part_id;
+        self.storage.current_part_id = part_id;
     
         // _scriptCurPtr is changed in this->load();
-        self.script_bak_off = self.script_cur_off;
+        self.storage.script_bak_off = self.storage.script_cur_off;
 
         Ok(())
     }
 
     fn reset_mem_block(&mut self) {
         self.mem_buf = [0; MEM_BLOCK_SIZE];
-        self.script_bak_off = 0;
-        self.script_cur_off = 0;
-        self.vid_bak_off = MEM_BLOCK_SIZE - 0x800 * 16; //0x800 = 2048, so we have 32KB free for vidBack and vidCur
-        self.vid_cur_off = self.vid_bak_off;
+        self.storage.script_bak_off = 0;
+        self.storage.script_cur_off = 0;
+        self.storage.vid_bak_off = MEM_BLOCK_SIZE - 0x800 * 16; //0x800 = 2048, so we have 32KB free for vidBack and vidCur
+        self.storage.vid_cur_off = self.storage.vid_bak_off;
     }
 
     pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {
-        let mut loaded_list = vec![0; 64];
+        self.storage.loaded_list = vec![0; 64];
 
         if ser.mode() == Mode::Save {
             let mut ll_idx = 0;
@@ -318,34 +362,20 @@ impl Resource {
                 }
 
                 if let Some((i, me)) = mem_entry {
-                    loaded_list[ll_idx] = i as u8;
+                    self.storage.loaded_list[ll_idx] = i as u8;
                     ll_idx += 1;
                     mem_buf_idx += me.size;
                 }
             }
         }
 
-        let mut entries = [
-            (array_u8!(loaded_list), Ver(1)),
-            (data_u16!(self.current_part_id), Ver(1)),
-            (data_offset!(self.script_bak_off), Ver(1)),
-            (data_offset!(self.script_cur_off), Ver(1)),
-            (data_offset!(self.vid_bak_off), Ver(1)),
-            (data_offset!(self.vid_cur_off), Ver(1)),
-            (data_bool!(self.use_seg_video2), Ver(1)),
-            (data_offset!(self.seg_palette_idx), Ver(1)),
-            (data_offset!(self.seg_code_idx), Ver(1)),
-            (data_offset!(self.seg_cinematic_idx), Ver(1)),
-            (data_offset!(self.seg_video2_idx), Ver(1)),
-        ];
-    
-        ser.save_or_load_entries(&mut entries)?;
+        ser.save_or_load_entries(&mut self.storage, Ver(1))?;
 
         if ser.mode() == Mode::Load {
             let mut mem_buf_idx = 0;
 
             for me in &mut self.mem_entries {
-                let buf = read_bank(&self.data_dir, me.bank_id, me.bank_offset, me.packed_size, me.size)?;
+                let buf = read_bank(&self.data_dir, me)?;
                 me.buf_offset = self.mem_buf.len() as u16;
                 self.mem_buf[mem_buf_idx..mem_buf_idx + buf.len()].copy_from_slice(&buf); // TODO: optimize by reading in read_bank into the slice instead of returning vec
                 mem_buf_idx += me.size as usize;

@@ -168,67 +168,6 @@ impl AccessorWrap for Vec<u16> {
     }
 }
 
-#[macro_export]
-macro_rules! data_bool {
-    ($var:expr) => {
-        Entry::Bool(Box::new($var))
-    };
-}
-
-#[macro_export]
-macro_rules! data_u8 {
-    ($var:expr) => {
-        Entry::U8(Box::new($var))
-    };
-}
-
-#[macro_export]
-macro_rules! data_u16 {
-    ($var:expr) => {
-        Entry::U16(Box::new($var))
-    };
-}
-
-#[macro_export]
-macro_rules! data_u32 {
-    ($var:expr) => {
-        Entry::U32(Box::new($var))
-    };
-}
-
-#[macro_export]
-macro_rules! data_offset {
-    ($var:expr) => {
-        Entry::Offset(Box::new($var))
-    };
-}
-
-#[macro_export]
-macro_rules! array_u8 {
-    ($var:ident) => {
-        Entry::ArrayU8(Box::new($var))
-    };
-}
-
-#[macro_export]
-macro_rules! array_u16 {
-    ($var:ident) => {
-        Entry::ArrayU16(Box::new($var))
-    };
-}
-
-pub type Accessor = Box<dyn AccessorWrap>;
-
-pub enum Entry {
-    Bool(Accessor),
-    U8(Accessor),
-    U16(Accessor),
-    U32(Accessor),
-    ArrayU8(Accessor),
-    ArrayU16(Accessor),
-    Offset(Accessor),
-}
-
 pub struct Serializer {
     stream: File,
     mode: Mode,
@@ -252,24 +191,11 @@ impl Serializer {
         self.mode
     }
 
-    pub fn save_or_load_entries(&mut self, entries: &mut [(Entry, Ver)]) -> Result<()> {
+    pub fn save_or_load_entries(&mut self, accessor: &mut impl AccessorWrap, min_ver: Ver) -> Result<()> {
         // debug(DBG_SER, "Serializer::saveOrLoadEntries() _mode=%d", _mode);
-        self.bytes_count = 0;
-        for (entry, min_ver) in entries {
-            if self.mode == Mode::Save || self.save_ver >= *min_ver && self.save_ver <= CUR_VER {
-                match entry {
-                    Entry::Bool(accessor) |
-                    Entry::U8(accessor) |
-                    Entry::U16(accessor) |
-                    Entry::U32(accessor) |
-                    Entry::ArrayU8(accessor) |
-                    Entry::ArrayU16(accessor) |
-                    Entry::Offset(accessor) => {
-                        (**accessor).access(self.mode, &mut self.stream)?;
-                        self.bytes_count += (**accessor).size() as u32;
-                    }
-                }
-            }
+        if self.mode == Mode::Save || self.save_ver >= min_ver && self.save_ver <= CUR_VER {
+            accessor.access(self.mode, &mut self.stream)?;
+            self.bytes_count = accessor.size() as u32;
         }
         // debug(DBG_SER, "Serializer::saveOrLoadEntries() _bytesCount=%d", _bytesCount);
         Ok(())

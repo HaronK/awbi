@@ -1,4 +1,5 @@
 use crate::file::File;
+use crate::resource::MemEntry;
 use anyhow::{ensure, Result};
 
 #[derive(Default)]
@@ -70,21 +71,21 @@ impl<'a> Bank<'a> {
         }
     }
 
-    pub fn read(&mut self, bank_id: u8, bank_offset: u32, packed_size: u16, size: u16) -> Result<Vec<u8>> {
-        let bank_name = format!("bank{:02}", bank_id);
+    pub fn read(&mut self, me: &MemEntry) -> Result<Vec<u8>> {
+        let bank_name = format!("bank{:02}", me.bank_id);
 
         let mut f = File::open(&bank_name, &self.data_dir, false)?;
 
-        f.seek(bank_offset as u64)?;
+        f.seek(me.bank_offset as u64)?;
 
         // Depending if the resource is packed or not we
         // can read directly or unpack it.
 
-        let mut buf = vec![0; packed_size as usize];
+        let mut buf = vec![0; me.packed_size as usize];
 
         f.read(&mut buf)?;
 
-        if packed_size == size {
+        if me.packed_size == me.size {
             Ok(buf)
         } else {
             self.packed = PackedData::new(buf);
