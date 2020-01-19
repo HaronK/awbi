@@ -1,5 +1,4 @@
 use crate::file::*;
-use crate::reference::Ref;
 use crate::serializer::*;
 use crate::system::*;
 use anyhow::Result;
@@ -108,8 +107,8 @@ impl Mixer {
     pub fn init(&mut self) {
         self.channels = Default::default();
         self.mutex = self.sys.get_mut().create_mutex();
-        // self.sys.start_audio(&Mixer::mixCallback, self);
-        todo!();
+        // self.sys.get_mut().start_audio(&|len| self.mix(len));
+        todo!(); // TODO: start_audio
     }
 
     pub fn free(&mut self) {
@@ -215,8 +214,6 @@ impl Mixer {
         // PCM in combination with the PulseAudio driver.
         buf.iter().map(|v| (*v as i16 + 128) as u8).collect()
     }
-
-    pub fn mix_callback(_param: &[u8], _buf: &[u8]) {}
 
     pub fn save_or_load(&mut self, ser: &mut Serializer) {
         self.sys.get_mut().lock_mutex(&self.mutex);

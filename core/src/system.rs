@@ -21,7 +21,7 @@ pub struct PlayerInput {
     state_slot: u8,
 }
 
-type AudioCallback = fn(param: &[u8], stream: &[u8]);
+type AudioCallback = FnMut(usize) -> Vec<u8>;
 type TimerCallback = fn(delay: u32, param: &[u8]);
 
 pub type SystemRef = Ref<Box<dyn System>>;
@@ -45,7 +45,7 @@ pub trait System {
     fn sleep(&self, duration: u32);
     fn get_timestamp(&self) -> u32;
 
-    fn start_audio(&mut self, callback: &AudioCallback, param: &[u8]);
+    fn start_audio(&mut self, callback: &AudioCallback);
     fn stop_audio(&mut self);
     fn get_output_sample_rate(&mut self) -> u32;
 
