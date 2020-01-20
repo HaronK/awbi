@@ -25,12 +25,12 @@ impl<T> Clone for Ref<T> {
     }
 }
 
-// impl<T> Deref for Ref<T> {
-//     type Target = T;
+// impl<'a, T: 'a> Deref for Ref<T> {
+//     type Target = std::cell::Ref<'a, T>;
 
 //     #[inline(always)]
-//     fn deref(&self) -> &Self::Target {
-//         &*self.0.borrow()
+//     fn deref(&self) -> Self::Target {
+//         self.0.borrow()
 //     }
 // }
 

@@ -1,4 +1,5 @@
 use crate::file::*;
+use crate::reference::*;
 use crate::serializer::*;
 use crate::system::*;
 use anyhow::Result;
@@ -84,7 +85,8 @@ impl AccessorWrap for MixerChannel {
 
 const AUDIO_NUM_CHANNELS: usize = 4;
 
-// #[derive(Default)]
+pub type MixerRef = Ref<Box<Mixer>>;
+
 pub struct Mixer {
     sys: SystemRef,
     mutex: Vec<u8>,

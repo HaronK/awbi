@@ -1,6 +1,7 @@
 use crate::bank::Bank;
 use crate::file::File;
 use crate::parts::*;
+use crate::reference::*;
 use crate::serializer::*;
 use anyhow::{bail, ensure, Context, Result};
 
@@ -149,6 +150,8 @@ impl AccessorWrap for ResourceStorage {
     }
 }
 
+pub type ResourceRef = Ref<Box<Resource>>;
+
 pub struct Resource {
     // Video *video;
     data_dir: String,
@@ -166,7 +169,7 @@ impl Resource {
             mem_entries: Vec::new(),
             requested_next_part: 0,
             mem_buf: [0; MEM_BLOCK_SIZE],
-            storage: ResourceStorage::default(),
+            storage: Default::default(),
         }
     }
 
