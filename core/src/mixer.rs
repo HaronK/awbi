@@ -119,7 +119,7 @@ impl Mixer {
         self.sys.get_mut().destroy_mutex(&self.mutex);
     }
 
-    pub fn play_channel(&mut self, channel: u8, mc: MixerChunk, freq: u16, volume: u8) {
+    fn play_channel(&mut self, channel: u8, mc: MixerChunk, freq: u16, volume: u8) {
         // debug(DBG_SND, "Mixer::playChannel(%d, %d, %d)", channel, freq, volume);
         assert!((channel as usize) < AUDIO_NUM_CHANNELS);
 

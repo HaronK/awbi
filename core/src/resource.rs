@@ -5,8 +5,8 @@ use crate::reference::*;
 use crate::serializer::*;
 use anyhow::{bail, ensure, Context, Result};
 
-#[derive(PartialEq)]
-enum MemEntryState {
+#[derive(Clone, Copy, PartialEq)]
+pub enum MemEntryState {
     NotNeeded,
     Loaded,
     LoadMe,
@@ -29,22 +29,22 @@ impl MemEntryState {
 // This is a directory entry. When the game starts, it loads memlist.bin and
 // populate and array of MemEntry
 pub struct MemEntry {
-    state: MemEntryState, // 0x0
-    res_type: ResType,    // 0x1
-    buf_offset: u16,      // 0x2
+    pub(crate) state: MemEntryState, // 0x0
+    pub(crate) res_type: ResType,    // 0x1
+    pub(crate) buf_offset: u16,      // 0x2
     unk4: u16,            // 0x4, unused
     rank_num: u8,         // 0x6
-    pub bank_id: u8,      // 0x7
-    pub bank_offset: u32, // 0x8 0xA
+    pub(crate) bank_id: u8,      // 0x7
+    pub(crate) bank_offset: u32, // 0x8 0xA
     unk_c: u16,           // 0xC, unused
     // All resources are packed (for a gain of 28% according to Chahi)
-    pub packed_size: u16, // 0xE
+    pub(crate) packed_size: u16, // 0xE
     unk10: u16,           // 0x10, unused
-    pub size: u16,        // 0x12
+    pub(crate) size: u16,        // 0x12
 }
 
-#[derive(PartialEq)]
-enum ResType {
+#[derive(Clone, Copy, PartialEq)]
+pub enum ResType {
     Sound,
     Music,
     PolyAnim, // full screen video buffer, size=0x7D00
@@ -155,7 +155,7 @@ pub type ResourceRef = Ref<Box<Resource>>;
 pub struct Resource {
     // Video *video;
     data_dir: String,
-    mem_entries: Vec<MemEntry>,
+    pub(crate) mem_entries: Vec<MemEntry>,
     requested_next_part: u16,
     mem_buf: [u8; MEM_BLOCK_SIZE],
     storage: ResourceStorage,
@@ -175,6 +175,23 @@ impl Resource {
 
     pub fn data_dir(&self) -> String {
         self.data_dir.clone()
+    }
+
+    pub fn memset(&mut self, offset: usize, val: u8, size: usize) {
+        for v in &mut self.mem_buf[offset..offset + size] {
+            *v = val;
+        }
+    }
+
+    pub fn mem_to_slice(&self, offset: usize, size: usize) -> &[u8] {
+        &self.mem_buf[offset..offset + size]
+    }
+
+    pub fn from_mem_be_u16(&self, offset: usize) -> u16 {
+        let b1 = self.mem_buf[offset];
+        let b2 = self.mem_buf[offset + 1];
+
+        u16::from_be_bytes([b1, b2])
     }
 
     // Read all entries from memlist.bin. Do not load anything in memory,

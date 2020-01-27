@@ -3,28 +3,28 @@ use crate::mixer::*;
 use crate::resource::*;
 use crate::serializer::*;
 use crate::system::*;
-use anyhow::Result;
+use anyhow::{bail, Result};
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 struct SfxInstrument {
-	data: Vec<u8>,
+	buf_offset: u16,
 	volume: u16,
 }
 
-#[derive(Default)]
 struct SfxModule {
-	data: Vec<u8>,
+	buf_offset: u16,
 	cur_pos: u16,
 	cur_order: u8,
 	num_order: u8,
-	order_table: Vec<u8>, //[0x80];
-	samples: Vec<SfxInstrument>, //[15];
+	order_table: [u8; 0x80],
+	samples: [SfxInstrument; 15],
 }
 
-impl SfxModule {
-    fn new() -> Self {
+impl Default for SfxModule {
+    fn default() -> Self {
         Self {
-            order_table: vec![0; 0x80],
+            // order_table: [0; 0x80],
+            // samples: [Default::default(); 15],
             ..Default::default()
         }
     }
@@ -104,12 +104,64 @@ impl SfxPlayer {
         self.delay = delay * 60 / 7050;
     }
 
-    fn load_sfx_module(&mut self, res_num: u16, delay: u16, pos: u8) {
-        todo!(); // TODO: implement
+    fn load_sfx_module(&mut self, res_num: u16, delay: u16, pos: u8) -> Result<()> {
+        // debug(DBG_SND, "SfxPlayer::loadSfxModule(0x%X, %d, %d)", resNum, delay, pos);
+        let _ = MutexStack::new(self.sys.clone(), &self.mutex);
+    
+        // to avoid borrow checker complain
+        let (state, res_type, me_offset) = {
+            let me = &self.res.get().mem_entries[res_num as usize];
+            (me.state, me.res_type, me.buf_offset)
+        };
+
+        if state == MemEntryState::Loaded && res_type == ResType::Music {
+            self.res_num = res_num;
+            self.sfx_mod = Default::default();
+            self.sfx_mod.cur_order = pos;
+            self.sfx_mod.num_order = self.res.get().from_mem_be_u16(me_offset as usize + 0x3E) as u8;
+            // debug(DBG_SND, "SfxPlayer::loadSfxModule() curOrder = 0x%X numOrder = 0x%X", _sfxMod.curOrder, _sfxMod.numOrder);
+            self.sfx_mod.order_table[..]
+                .clone_from_slice(self.res.get().mem_to_slice(me_offset as usize + 0x40, 0x80));
+            if delay == 0 {
+                self.delay = self.res.get().from_mem_be_u16(me_offset as usize);
+            } else {
+                self.delay = delay;
+            }
+            self.delay *= 60 / 7050;
+            self.sfx_mod.buf_offset = me_offset + 0xC0;
+        //     debug(DBG_SND, "SfxPlayer::loadSfxModule() eventDelay = %d ms", _delay);
+            self.prepare_instruments(me_offset as usize + 2)?;
+        // } else {
+        //     warning("SfxPlayer::loadSfxModule() ec=0x%X", 0xF8);
+        }
+        
+        Ok(())
     }
 
-    fn prepare_instruments(&mut self, p: &[u8]) {
-        todo!(); // TODO: implement
+    fn prepare_instruments(&mut self, mut offset: usize) -> Result<()> {
+        // self.sfx_mod.samples.clear();
+
+        for ins in &mut self.sfx_mod.samples {
+            let res_num = self.res.get().from_mem_be_u16(offset as usize) as usize;
+            offset += 2;
+
+            if res_num != 0 {
+                ins.volume = self.res.get().from_mem_be_u16(offset as usize);
+                let me = &self.res.get().mem_entries[res_num];
+
+                if me.state == MemEntryState::Loaded && me.res_type == ResType::Sound {
+                    ins.buf_offset = me.buf_offset;
+                    self.res.get_mut().memset(ins.buf_offset as usize + 8, 0, 4);
+            //         debug(DBG_SND, "Loaded instrument 0x%X n=%d volume=%d", resNum, i, ins->volume);
+                } else {
+                    bail!("Error loading instrument {}", res_num);
+                }
+            }
+
+            offset += 2; // skip volume
+        }
+        
+        Ok(())
     }
 
     fn start(&mut self) {
