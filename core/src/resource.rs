@@ -194,6 +194,10 @@ impl Resource {
         u16::from_be_bytes([b1, b2])
     }
 
+    pub fn read_palette(&self, offset: usize, size: usize) -> &[u8] {
+        self.mem_to_slice(self.storage.seg_palette_idx + offset, size)
+    }
+
     // Read all entries from memlist.bin. Do not load anything in memory,
     // this is just a fast way to access the data later based on their id.
     fn read_entries(&mut self) -> Result<()> {

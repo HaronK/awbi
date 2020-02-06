@@ -1,7 +1,7 @@
 use crate::reference::Ref;
 
-pub const NUM_COLORS: u8 = 16;
-pub const BYTE_PER_PIXEL: u8 = 3;
+pub const NUM_COLORS: usize = 16;
+pub const BYTE_PER_PIXEL: usize = 3;
 
 pub const DIR_LEFT: u8 = 1 << 0;
 pub const DIR_RIGHT: u8 = 1 << 1;
@@ -21,8 +21,8 @@ pub struct PlayerInput {
     state_slot: u8,
 }
 
-type AudioCallback = FnMut(usize) -> Vec<u8>;
-type TimerCallback = FnMut(u32) -> u32;
+type AudioCallback = dyn FnMut(usize) -> Vec<u8>;
+type TimerCallback = dyn FnMut(u32) -> u32;
 
 pub type SystemRef = Ref<Box<dyn System>>;
 
@@ -67,7 +67,7 @@ pub struct MutexStack {
 
 impl MutexStack {
     pub fn new(sys: SystemRef, mutex: &[u8]) -> Self {
-        let mut res = Self {
+        let res = Self {
             sys,
             mutex: mutex.to_vec(),
         };

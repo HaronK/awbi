@@ -4,7 +4,9 @@
         "Bytecode",
         "deserializer",
         "framebuffer",
+        "interp",
         "memlist",
-        "serializer"
+        "serializer",
+        "vscroll"
     ]
 }
