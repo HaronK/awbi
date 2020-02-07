@@ -194,6 +194,10 @@ impl Resource {
         u16::from_be_bytes([b1, b2])
     }
 
+    pub fn from_mem_u8(&self, offset: usize) -> u8 {
+        self.mem_buf[offset]
+    }
+
     pub fn read_palette(&self, offset: usize, size: usize) -> &[u8] {
         self.mem_to_slice(self.storage.seg_palette_idx + offset, size)
     }

@@ -4,6 +4,7 @@
         "Bytecode",
         "deserializer",
         "framebuffer",
+        "hliney",
         "interp",
         "memlist",
         "serializer",

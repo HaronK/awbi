@@ -1,6 +1,7 @@
 use crate::file::File;
 use crate::resource::*;
 use crate::serializer::*;
+use crate::staticres::*;
 use crate::system::*;
 use anyhow::Result;
 
@@ -41,7 +42,18 @@ impl Polygon {
 	}
 
 	fn read_vertices(&mut self, buf: &[u8], zoom: u16) {
-		todo!(); // TODO: implement
+		self.bbw = buf[0] as u16 * zoom / 64;
+		self.bbh = buf[1] as u16 * zoom / 64;
+		self.num_points = buf[2];
+		let mut off = 3;
+		// assert((numPoints & 1) == 0 && numPoints < MAX_POINTS);
+	
+		//Read all points, directly from bytecode segment
+		for pt in &mut self.points[0..self.num_points as usize] {
+			pt.x = (buf[off] as u16 * zoom / 64) as i16;
+			pt.y = (buf[off + 1] as u16 * zoom / 64) as i16;
+			off += 2;
+		}
 	}
 }
 
@@ -65,8 +77,8 @@ struct Video {
 	// page_offsets: [usize; 4];
 
 	// I am almost sure that:
-	// _curPagePtr1 is the backbuffer 
-	// _curPagePtr2 is the frontbuffer
+	// _curPagePtr1 is the back buffer 
+	// _curPagePtr2 is the front buffer
 	// _curPagePtr3 is the background builder.
 	cur_page_idx1: usize,
 	cur_page_idx2: usize,
@@ -78,8 +90,8 @@ struct Video {
 	//Precomputer division lookup table
 	interp_table: [u16; 0x400],
 
-	// Ptr _pData;
-	// uint8_t *_dataBuf;
+	data_page_idx: usize,
+	data_page_offset: usize,
 
 	pages_buf: [[u8; VID_PAGE_SIZE]; 4],
 	mask: u8,
@@ -99,6 +111,8 @@ impl Video {
 			polygon: Polygon::new(),
 			hliney: 0,
 			interp_table: [0; 0x400],
+			data_page_idx: 0,
+			data_page_offset: 0,
 			pages_buf: [[0; VID_PAGE_SIZE]; 4],
 			mask: 0,
         }
@@ -131,19 +145,384 @@ impl Video {
 		}
 	}
 
-	// void setDataBuffer(uint8_t *dataBuf, uint16_t offset);
-	// void readAndDrawPolygon(uint8_t color, uint16_t zoom, const Point &pt);
-	// void fillPolygon(uint16_t color, uint16_t zoom, const Point &pt);
-	// void readAndDrawPolygonHierarchy(uint16_t zoom, const Point &pt);
-	// int32_t calcStep(const Point &p1, const Point &p2, uint16_t &dy);
+	fn fetch_data_u8(&mut self) -> u8 {
+		let res = self.res.get().from_mem_u8(self.data_page_idx + self.data_page_offset);
+		self.data_page_offset += 1;
+		res
+	}
 
-	// void drawString(uint8_t color, uint16_t x, uint16_t y, uint16_t strId);
-	// void drawChar(uint8_t c, uint16_t x, uint16_t y, uint8_t color, uint8_t *buf);
-	// void drawPoint(uint8_t color, int16_t x, int16_t y);
-	// void drawLineBlend(int16_t x1, int16_t x2, uint8_t color);
-	// void drawLineN(int16_t x1, int16_t x2, uint8_t color);
-	// void drawLineP(int16_t x1, int16_t x2, uint8_t color);
+	fn fetch_data_u16(&mut self) -> u16 {
+		let res = self.res.get().from_mem_be_u16(self.data_page_idx + self.data_page_offset);
+		self.data_page_offset += 2;
+		res
+	}
 
+	pub fn set_data_page(&mut self, page_idx: usize, offset: usize) {
+		self.data_page_idx = page_idx;
+		self.data_page_offset = offset;
+	}
+
+	// A shape can be given in two different ways:
+	// 	- A list of screen space vertices.
+	// 	- A list of object space vertices, based on a delta from the first vertex.
+
+	// 	This is a recursive function.
+	fn read_and_draw_polygon(&mut self, mut color: u8, zoom: u16, pt: &Point) {
+		let mut i = self.fetch_data_u8();
+	
+		if i >= 0xC0 {	// 0xc0 = 192
+			// WTF ?
+			if color & 0x80 != 0 {   //0x80 = 128 (1000 0000)
+				color = i & 0x3F; //0x3F =  63 (0011 1111)   
+			}
+	
+			// pc is misleading here since we are not reading bytecode but only
+			// vertices information.
+			// self.polygon.read_vertices(_pData.pc, zoom); // TODO:
+	
+			self.fill_polygon(color, zoom, pt);
+
+			todo!();
+		} else {
+			i &= 0x3F;  //0x3F = 63
+			if i == 1 {
+				// warning("Video::readAndDrawPolygon() ec=0x%X (i != 2)", 0xF80);
+			} else if i == 2 {
+				self.read_and_draw_polygon_hierarchy(zoom, pt);
+			} else {
+				// warning("Video::readAndDrawPolygon() ec=0x%X (i != 2)", 0xFBB);
+			}
+		}
+	}
+
+	fn fill_polygon(&mut self, color: u8, _zoom: u16, pt: &Point) {
+		if self.polygon.bbw == 0 && self.polygon.bbh == 1 && self.polygon.num_points == 4 {
+			self.draw_point(color, pt.x, pt.y);
+
+			return;
+		}
+		
+		let mut x1 = pt.x - (self.polygon.bbw / 2) as i16;
+		let mut x2 = pt.x + (self.polygon.bbw / 2) as i16;
+		let y1 = pt.y - (self.polygon.bbh / 2) as i16;
+		let y2 = pt.y + (self.polygon.bbh / 2) as i16;
+	
+		if x1 > 319 || x2 < 0 || y1 > 199 || y2 < 0 {
+			return;
+		}
+	
+		self.hliney = y1 as u16;
+		
+		let mut i = 0;
+		let mut j = (self.polygon.num_points - 1) as usize;
+		
+		x2 = self.polygon.points[i].x + x1;
+		x1 = self.polygon.points[j].x + x1;
+	
+		i += 1;
+		j -= 1;
+	
+		// let mut draw_func: Box<dyn FnMut(i16, i16, u8)> = if color < 0x10 {
+		// 	Box::new(|x1, x2, c| self.draw_line_n(x1, x2, c))
+		// } else if color > 0x10 {
+		// 	Box::new(|x1, x2, c| self.draw_line_p(x1, x2, c))
+		// } else {
+		// 	Box::new(|x1, x2, c| self.draw_line_blend(x1, x2, c))
+		// };
+	
+		let mut cpt1 = (x1 as u32) << 16;
+		let mut cpt2 = (x2 as u32) << 16;
+	
+		loop {
+			self.polygon.num_points -= 2;
+			if self.polygon.num_points == 0 {
+	// #if TRACE_FRAMEBUFFER
+	// 				dumpFrameBuffers("fillPolygonEnd");
+	// 		#endif
+	// #if TRACE_BG_BUFFER
+	// 			dumpBackGroundBuffer();
+	// #endif
+				break;
+			}
+
+			let (step1, _) = self.calc_step(&self.polygon.points[j + 1], &self.polygon.points[j]);
+			let (step2, h) = self.calc_step(&self.polygon.points[i - 1], &self.polygon.points[i]);
+	
+			i += 1;
+			j -= 1;
+
+			cpt1 = (cpt1 & 0xFFFF0000) | 0x7FFF;
+			cpt2 = (cpt2 & 0xFFFF0000) | 0x8000;
+	
+			if h == 0 {
+				cpt1 += step1 as u32;
+				cpt2 += step2 as u32;
+			} else {
+				for _ in 0..h {
+					if self.hliney >= 0 {
+						x1 = (cpt1 >> 16) as i16;
+						x2 = (cpt2 >> 16) as i16;
+						if x1 <= 319 && x2 >= 0 {
+							if x1 < 0 {
+								x1 = 0;
+							}
+							if x2 > 319 {
+								x2 = 319;
+							}
+							// (*draw_func)(x1, x2, color);
+							if color < 0x10 {
+								self.draw_line_n(x1, x2, color);
+							} else if color > 0x10 {
+								self.draw_line_p(x1, x2, color);
+							} else {
+								self.draw_line_blend(x1, x2, color);
+							}
+						}
+					}
+					cpt1 += step1 as u32;
+					cpt2 += step2 as u32;
+					self.hliney += 1;
+					if self.hliney > 199 {
+						return;
+					}
+				}
+			}
+	
+			// #if TRACE_FRAMEBUFFER
+			// 		dumpFrameBuffers("fillPolygonChild");
+			// #endif
+			// 		#if TRACE_BG_BUFFER
+		 
+			// 	dumpBackGroundBuffer();
+			// #endif
+		}
+	}
+
+	// What is read from the bytecode is not a pure screen space polygon but a polygon space polygon.
+	fn read_and_draw_polygon_hierarchy(&mut self, zoom: u16, pgc: &Point) {
+
+		let mut pt = pgc.clone();
+		pt.x -= (self.fetch_data_u8() as u16 * zoom / 64) as i16;
+		pt.y -= (self.fetch_data_u8() as u16 * zoom / 64) as i16;
+
+		let children = self.fetch_data_u8() as u16;
+		// debug(DBG_VIDEO, "Video::readAndDrawPolygonHierarchy childs=%d", childs);
+
+		for _ in 0..children {
+			let mut off = self.fetch_data_u16();
+			let mut po = pt;
+
+			po.x += (self.fetch_data_u8() as u16 * zoom / 64) as i16;
+			po.y += (self.fetch_data_u8() as u16 * zoom / 64) as i16;
+	
+			let mut color = 0xFF;
+			let _bp = off;
+			off &= 0x7FFF;
+
+			if _bp & 0x8000 != 0 {
+				color = self.fetch_data_u8() & 0x7F;
+				self.data_page_offset += 1;
+			}
+
+			let bak = self.data_page_offset;
+			self.data_page_offset = (off * 2) as usize;
+
+			self.read_and_draw_polygon(color, zoom, &po);
+
+			self.data_page_offset = bak;
+		}
+	}
+
+	fn calc_step(&self, p1: &Point, p2: &Point) -> (i16, usize) {
+		let dy = (p2.y - p1.y) as usize;
+		((p2.x - p1.x) * (self.interp_table[dy] as i16) * 4, dy)
+	}
+	
+	fn draw_string(&mut self, color: u8, mut x: u16, mut y: u16, string_id: u16) {
+
+		if let Some(se) = STRINGS_TABLE_ENG.get(&string_id) {
+			// debug(DBG_VIDEO, "drawString(%d, %d, %d, '%s')", color, x, y, se->str);
+			
+			//Used if the string contains a return carriage.
+			let x_origin = x;
+
+			for ch in se.chars() {
+				if ch == '\n' {
+					y += 8;
+					x = x_origin;
+					continue;
+				} 
+
+				self.draw_char(ch, x, y, color, self.cur_page_idx1);
+				x += 1;
+			}
+		}
+	}
+
+	fn draw_char(&mut self, character: char, x: u16, y: u16, color: u8, idx: usize) {
+		if x <= 39 && y <= 192 {
+			
+			let font_off = ((character as u8 - b' ') * 8) as usize;
+	
+			let mut buf_off = (x * 4 + y * 160) as usize;
+	
+			for j in 0..8 {
+				let mut ch = FONT[font_off + j];
+				for i in 0..4 {
+					let b = self.pages_buf[idx][buf_off + i];
+					let mut cmask = 0xFF;
+					let mut colb = 0;
+					if ch & 0x80 != 0 {
+						colb |= color << 4;
+						cmask &= 0x0F;
+					}
+					ch <<= 1;
+					if ch & 0x80 != 0 {
+						colb |= color;
+						cmask &= 0xF0;
+					}
+					ch <<= 1;
+					self.pages_buf[idx][buf_off + i] = (b & cmask) | colb;
+				}
+				buf_off += 160;
+			}
+		}
+	}
+
+	fn draw_point(&mut self, color: u8, x: i16, y: i16) {
+		// debug(DBG_VIDEO, "drawPoint(%d, %d, %d)", color, x, y);
+		if x >= 0 && x <= 319 && y >= 0 && y <= 199 {
+			let off = (y * 160 + x / 2) as usize;
+		
+			let (mut cmaskn, mut cmasko) = if x & 1 != 0 {
+				(0x0F, 0xF0)
+			} else {
+				(0xF0, 0x0F)
+			};
+	
+			// uint8_t colb = (color << 4) | color;
+			let colb = if color == 0x10 {
+				cmaskn &= 0x88;
+				cmasko = !cmaskn;
+				0x88
+			} else if color == 0x11 {
+				self.pages_buf[0][off]
+			} else {
+				(color << 4) | color
+			};
+			let b = self.pages_buf[self.cur_page_idx1][off];
+			self.pages_buf[self.cur_page_idx1][off] = (b & cmasko) | (colb & cmaskn);
+		}
+	}
+
+	// Blend a line in the current framebuffer (_curPagePtr1)
+	fn draw_line_blend(&mut self, x1: i16, x2: i16, color: u8) {
+		// debug(DBG_VIDEO, "drawLineBlend(%d, %d, %d)", x1, x2, color);
+		let xmax = std::cmp::max(x1, x2);
+		let xmin = std::cmp::min(x1, x2);
+		let mut off = (self.hliney * 160 + xmin as u16 / 2) as usize;
+
+		let mut w = xmax / 2 - xmin / 2 + 1;
+		let mut cmaske = 0;
+		let mut cmasks = 0;	
+
+		if xmin & 1 != 0 {
+			w -= 1;
+			cmasks = 0xF7;
+		}
+		if xmax & 1 == 0 {
+			w -= 1;
+			cmaske = 0x7F;
+		}
+
+		if cmasks != 0 {
+			self.pages_buf[self.cur_page_idx1][off] =
+				(self.pages_buf[self.cur_page_idx1][off] & cmasks) | 0x08;
+			off += 1;
+		}
+		for _ in 0..w {
+			self.pages_buf[self.cur_page_idx1][off] =
+				(self.pages_buf[self.cur_page_idx1][off] & 0x77) | 0x88;
+			off += 1;
+		}
+		if cmaske != 0 {
+			self.pages_buf[self.cur_page_idx1][off] =
+				(self.pages_buf[self.cur_page_idx1][off] & cmaske) | 0x80;
+			off += 1;
+		}
+	}
+
+	fn draw_line_n(&mut self, x1: i16, x2: i16, color: u8) {
+		// debug(DBG_VIDEO, "drawLineN(%d, %d, %d)", x1, x2, color);
+		let xmax = std::cmp::max(x1, x2);
+		let xmin = std::cmp::min(x1, x2);
+		let mut off = (self.hliney * 160 + xmin as u16 / 2) as usize;
+	
+		let mut w = xmax / 2 - xmin / 2 + 1;
+		let mut cmaske = 0;
+		let mut cmasks = 0;	
+
+		if xmin & 1 != 0 {
+			w -= 1;
+			cmasks = 0xF0;
+		}
+		if xmax & 1 == 0 {
+			w -= 1;
+			cmaske = 0x0F;
+		}
+	
+		let colb = ((color & 0xF) << 4) | (color & 0xF);	
+		if cmasks != 0 {
+			self.pages_buf[self.cur_page_idx1][off] =
+				(self.pages_buf[self.cur_page_idx1][off] & cmasks) | (colb & 0x0F);
+			off += 1;
+		}
+		for _ in 0..w {
+			self.pages_buf[self.cur_page_idx1][off] = colb;
+			off += 1;
+		}
+		if cmaske != 0 {
+			self.pages_buf[self.cur_page_idx1][off] =
+				(self.pages_buf[self.cur_page_idx1][off] & cmaske) | (colb & 0xF0);
+			off += 1;
+		}
+	}
+
+	fn draw_line_p(&mut self, x1: i16, x2: i16, color: u8) {
+		// debug(DBG_VIDEO, "drawLineP(%d, %d, %d)", x1, x2, color);
+		let xmax = std::cmp::max(x1, x2);
+		let xmin = std::cmp::min(x1, x2);
+		let mut off = (self.hliney * 160 + xmin as u16 / 2) as usize;
+	
+		let mut w = xmax / 2 - xmin / 2 + 1;
+		let mut cmaske = 0;
+		let mut cmasks = 0;
+
+		if xmin & 1 != 0 {
+			w -= 1;
+			cmasks = 0xF0;
+		}
+		if xmax & 1 == 0 {
+			w -= 1;
+			cmaske = 0x0F;
+		}
+	
+		if cmasks != 0 {
+			self.pages_buf[self.cur_page_idx1][off] =
+				(self.pages_buf[self.cur_page_idx1][off] & cmasks) | (self.pages_buf[0][off] & 0x0F);
+			off += 1;
+		}
+		for _ in 0..w {
+			self.pages_buf[self.cur_page_idx1][off] = self.pages_buf[0][off];
+			off += 1;
+		}
+		if cmaske != 0 {
+			self.pages_buf[self.cur_page_idx1][off] =
+				(self.pages_buf[self.cur_page_idx1][off] & cmaske) | (self.pages_buf[0][off] & 0xF0);
+			off += 1;
+		}
+	}
+	
 	fn get_page_off(&self, page: usize) -> usize {
 		if page < self.pages_buf.len() {
 			page
@@ -389,7 +768,7 @@ impl AccessorWrap for Video {
     fn read(&mut self, stream: &mut File) -> Result<()> {
         self.current_palette_id.read(stream)?;
         self.palette_id_requested.read(stream)?;
-        // self.mask.read(stream)?; // TODO:
+        self.mask.read(stream)?;
         self.pages_buf[0].read(stream)?;
         self.pages_buf[1].read(stream)?;
         self.pages_buf[2].read(stream)?;
@@ -399,7 +778,7 @@ impl AccessorWrap for Video {
     fn write(&self, stream: &mut File) -> Result<()> {
         self.current_palette_id.write(stream)?;
         self.palette_id_requested.write(stream)?;
-        // self.mask.write(stream)?; // TODO:
+        self.mask.write(stream)?;
         self.pages_buf[0].write(stream)?;
         self.pages_buf[1].write(stream)?;
         self.pages_buf[2].write(stream)?;
@@ -407,10 +786,9 @@ impl AccessorWrap for Video {
     }
 
     fn size(&self) -> usize {
-        // self.cur_pos.size() + self.cur_order.size()
         self.current_palette_id.size() +
         self.palette_id_requested.size() +
-        // self.mask.size() + // TODO:
+        self.mask.size() +
         self.pages_buf[0].size() +
         self.pages_buf[1].size() +
         self.pages_buf[2].size() +
