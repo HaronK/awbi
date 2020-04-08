@@ -5,11 +5,11 @@ use crate::system::*;
 use anyhow::Result;
 
 #[derive(Default)]
-struct MixerChunk {
-    data: u32,
-    len: u16,
-    loop_pos: u16,
-    loop_len: u16,
+pub struct MixerChunk {
+    pub(crate) data: u32,
+    pub(crate) len: u16,
+    pub(crate) loop_pos: u16,
+    pub(crate) loop_len: u16,
 }
 
 // TODO: use proc_macro
@@ -87,7 +87,7 @@ const AUDIO_NUM_CHANNELS: usize = 4;
 
 pub type MixerRef = Ref<Box<Mixer>>;
 
-pub struct Mixer {
+pub(crate) struct Mixer {
     sys: SystemRef,
     mutex: Vec<u8>,
 
@@ -119,7 +119,7 @@ impl Mixer {
         self.sys.get_mut().destroy_mutex(&self.mutex);
     }
 
-    fn play_channel(&mut self, channel: u8, mc: MixerChunk, freq: u16, volume: u8) {
+    pub fn play_channel(&mut self, channel: u8, mc: MixerChunk, freq: u16, volume: u8) {
         // debug(DBG_SND, "Mixer::playChannel(%d, %d, %d)", channel, freq, volume);
         assert!((channel as usize) < AUDIO_NUM_CHANNELS);
 

@@ -70,6 +70,21 @@ impl AccessorWrap for u16 {
     }
 }
 
+impl AccessorWrap for i16 {
+    fn read(&mut self, stream: &mut File) -> Result<()> {
+        *self = stream.read_u16()? as i16;
+        Ok(())
+    }
+
+    fn write(&self, stream: &mut File) -> Result<()> {
+        stream.write_u16(*self as u16)
+    }
+
+    fn size(&self) -> usize {
+        std::mem::size_of::<u16>()
+    }
+}
+
 impl AccessorWrap for u32 {
     fn read(&mut self, stream: &mut File) -> Result<()> {
         *self = stream.read_u32()?;
@@ -100,71 +115,64 @@ impl AccessorWrap for usize {
     }
 }
 
-impl AccessorWrap for [u8] {
-    fn read(&mut self, stream: &mut File) -> Result<()> {
-        stream.read(self)
-    }
-
-    fn write(&self, stream: &mut File) -> Result<()> {
-        stream.write(self)
-    }
-
-    fn size(&self) -> usize {
-        std::mem::size_of::<u8>() * self.len()
-    }
-}
-
-impl AccessorWrap for [u16] {
+impl<T: AccessorWrap> AccessorWrap for [T] {
     fn read(&mut self, stream: &mut File) -> Result<()> {
         for i in 0..self.len() {
-            self[i] = stream.read_u16()?;
+            self[i].read(stream)?;
         }
         Ok(())
     }
 
     fn write(&self, stream: &mut File) -> Result<()> {
         for val in self {
-            stream.write_u16(*val)?;
+            val.write(stream)?;
         }
         Ok(())
     }
 
     fn size(&self) -> usize {
-        std::mem::size_of::<u8>() * self.len()
+        std::mem::size_of::<T>() * self.len()
     }
 }
 
-impl AccessorWrap for Vec<u8> {
-    fn read(&mut self, stream: &mut File) -> Result<()> {
-        stream.read(self)
-    }
-
-    fn write(&self, stream: &mut File) -> Result<()> {
-        stream.write(self)
-    }
-
-    fn size(&self) -> usize {
-        std::mem::size_of::<u8>() * self.len()
-    }
-}
-
-impl AccessorWrap for Vec<u16> {
+impl<T: AccessorWrap> AccessorWrap for Vec<T> {
     fn read(&mut self, stream: &mut File) -> Result<()> {
         for i in 0..self.len() {
-            self[i] = stream.read_u16()?;
+            self[i].read(stream)?;
         }
         Ok(())
     }
 
     fn write(&self, stream: &mut File) -> Result<()> {
         for val in self {
-            stream.write_u16(*val)?;
+            val.write(stream)?;
         }
         Ok(())
     }
 
     fn size(&self) -> usize {
-        std::mem::size_of::<u8>() * self.len()
+        std::mem::size_of::<T>() * self.len()
+    }
+}
+
+impl<T: AccessorWrap, const N: usize> AccessorWrap for [T; N]
+{
+    fn read(&mut self, stream: &mut File) -> Result<()> {
+        for i in 0..N {
+            self[i].read(stream)?;
+        }
+        Ok(())
+    }
+
+    fn write(&self, stream: &mut File) -> Result<()> {
+        for val in self.as_ref() {
+            val.write(stream)?;
+        }
+        Ok(())
+    }
+
+    fn size(&self) -> usize {
+        std::mem::size_of::<T>() * N
     }
 }
 

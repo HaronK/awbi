@@ -156,7 +156,7 @@ pub struct Resource {
     // Video *video;
     data_dir: String,
     pub(crate) mem_entries: Vec<MemEntry>,
-    requested_next_part: u16,
+    pub(crate) requested_next_part: u16,
     mem_buf: [u8; MEM_BLOCK_SIZE],
     storage: ResourceStorage,
 }
@@ -171,6 +171,30 @@ impl Resource {
             mem_buf: [0; MEM_BLOCK_SIZE],
             storage: Default::default(),
         }
+    }
+
+    pub fn current_part_id(&self) -> u16 {
+        self.storage.current_part_id
+    }
+
+    pub fn use_seg_video2(&self) -> bool {
+        self.storage.use_seg_video2
+    }
+
+    pub fn set_use_seg_video2(&mut self, val: bool) {
+        self.storage.use_seg_video2 = val;
+    }
+
+    pub fn seg_code_idx(&self) -> usize {
+        self.storage.seg_code_idx
+    }
+
+    pub fn seg_cinematic_idx(&self) -> usize {
+        self.storage.seg_cinematic_idx
+    }
+
+    pub fn seg_video2_idx(&self) -> usize {
+        self.storage.seg_video2_idx
     }
 
     pub fn data_dir(&self) -> String {
@@ -286,7 +310,7 @@ impl Resource {
         self.storage.script_cur_off = self.storage.script_bak_off;
     }
 
-    fn invalidate_res(&mut self) {
+    pub fn invalidate_res(&mut self) {
         // for me in &mut self.mem_entries {
         //     me.state = MemEntryState::NotNeeded;
         // }
@@ -296,7 +320,7 @@ impl Resource {
         self.storage.script_cur_off = 0;
     }
 
-    fn load_parts_or_mem_entry(&mut self, resource_id: u16) -> Result<()> {
+    pub fn load_parts_or_mem_entry(&mut self, resource_id: u16) -> Result<()> {
         if resource_id as usize > self.mem_entries.len() {
             self.requested_next_part = resource_id;
         } else {
@@ -314,7 +338,7 @@ impl Resource {
     // so _memList[video2Index] is never loaded for those parts of the game. When
     // needed (for action phrases) _memList[video2Index] is always loaded with 0x11
     // (as seen in memListParts).
-    fn setup_part(&mut self, part_id: u16) -> Result<()> {
+    pub fn setup_part(&mut self, part_id: u16) -> Result<()> {
         if part_id == self.storage.current_part_id {
             return Ok(());
         }

@@ -1,3 +1,6 @@
+
+#![feature(const_generics)]
+
 mod bank;
 mod engine;
 mod file;

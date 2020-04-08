@@ -1,4 +1,5 @@
 use crate::file::File;
+use crate::reference::Ref;
 use crate::resource::*;
 use crate::serializer::*;
 use crate::staticres::*;
@@ -11,13 +12,13 @@ struct StrEntry {
 }
 
 #[derive(Clone, Copy, Default)]
-struct Point {
+pub struct Point {
     x: i16,
     y: i16,
 }
 
 impl Point {
-	fn new(x: i16, y: i16) -> Self {
+	pub fn new(x: i16, y: i16) -> Self {
         Self { x, y }
     }
 }
@@ -65,14 +66,15 @@ const NO_PALETTE_CHANGE_REQUESTED: u8 = 0xFF;
 
 const VID_PAGE_SIZE: usize = 320 * 200 / 2;
 
+pub type VideoRef = Ref<Box<Video>>;
 
-struct Video {
+pub(crate) struct Video {
 	// typedef void (Video::*drawLine)(int16_t x1, int16_t x2, uint8_t col);
 
 	res: ResourceRef,
 	sys: SystemRef,
 
-	palette_id_requested: u8,
+	pub(crate) palette_id_requested: u8,
 	current_palette_id: u8,
 	// page_offsets: [usize; 4];
 
@@ -157,7 +159,7 @@ impl Video {
 		res
 	}
 
-	pub fn set_data_page(&mut self, page_idx: usize, offset: usize) {
+	pub(crate) fn set_data_page(&mut self, page_idx: usize, offset: usize) {
 		self.data_page_idx = page_idx;
 		self.data_page_offset = offset;
 	}
@@ -167,7 +169,7 @@ impl Video {
 	// 	- A list of object space vertices, based on a delta from the first vertex.
 
 	// 	This is a recursive function.
-	fn read_and_draw_polygon(&mut self, mut color: u8, zoom: u16, pt: &Point) {
+	pub(crate) fn read_and_draw_polygon(&mut self, mut color: u8, zoom: u16, pt: &Point) {
 		let mut i = self.fetch_data_u8();
 	
 		if i >= 0xC0 {	// 0xc0 = 192
@@ -338,7 +340,7 @@ impl Video {
 		((p2.x - p1.x) * (self.interp_table[dy] as i16) * 4, dy)
 	}
 	
-	fn draw_string(&mut self, color: u8, mut x: u16, mut y: u16, string_id: u16) {
+	pub(crate) fn draw_string(&mut self, color: u8, mut x: u16, mut y: u16, string_id: u16) {
 
 		if let Some(se) = STRINGS_TABLE_ENG.get(&string_id) {
 			// debug(DBG_VIDEO, "drawString(%d, %d, %d, '%s')", color, x, y, se->str);
@@ -536,12 +538,12 @@ impl Video {
 		}
 	}
 
-	fn change_page_off1(&mut self, page: usize) {
+	pub(crate) fn change_page_off1(&mut self, page: usize) {
 		// debug(DBG_VIDEO, "Video::changePagePtr1(%d)", page);
 		self.cur_page_idx1 = self.get_page_off(page);
 	}
 
-	fn fill_page(&mut self, page: usize, color: u8) {
+	pub(crate) fn fill_page(&mut self, page: usize, color: u8) {
 		// debug(DBG_VIDEO, "Video::fillPage(%d, %d)", page, color);
 		let page_off = self.get_page_off(page);
 	
@@ -560,9 +562,9 @@ impl Video {
 	// #endif
 	}
 
-	/*  This opcode is used once the background of a scene has been drawn in one of the framebuffer:
-	   it is copied in the current framebuffer at the start of a new frame in order to improve performances. */
-	fn copy_page(&mut self, src_page: usize, dst_page: usize, vscroll: i16) {
+	// This opcode is used once the background of a scene has been drawn in one of the framebuffer:
+	// it is copied in the current framebuffer at the start of a new frame in order to improve performances.
+	pub(crate) fn copy_page(&mut self, src_page: usize, dst_page: usize, vscroll: i16) {
 
 		// debug(DBG_VIDEO, "Video::copyPage(%d, %d)", srcPageId, dstPageId);
 	
@@ -692,7 +694,7 @@ impl Video {
 		// #endif
 	}
 
-	fn update_display(&mut self, page: usize) {
+	pub(crate) fn update_display(&mut self, page: usize) {
 		// debug(DBG_VIDEO, "Video::updateDisplay(%d)", pageId);
 	
 		if page != 0xFE {

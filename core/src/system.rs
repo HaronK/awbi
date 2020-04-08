@@ -8,17 +8,17 @@ pub const DIR_RIGHT: u8 = 1 << 1;
 pub const DIR_UP: u8 = 1 << 2;
 pub const DIR_DOWN: u8 = 1 << 3;
 
-pub struct PlayerInput {
-    dir_mask: u8,
-    button: bool,
-    code: bool,
-    pause: bool,
-    quit: bool,
-    last_char: char,
-    save: bool,
-    load: bool,
-    fast_mode: bool,
-    state_slot: u8,
+pub(crate) struct PlayerInput {
+    pub dir_mask: u8,
+    pub button: bool,
+    pub code: bool,
+    pub pause: bool,
+    pub quit: bool,
+    pub last_char: u8,
+    pub save: bool,
+    pub load: bool,
+    pub fast_mode: bool,
+    pub state_slot: u8,
 }
 
 type AudioCallback = dyn FnMut(usize) -> Vec<u8>;
@@ -33,7 +33,8 @@ pub trait System {
     // typedef void (*AudioCallback)(void *param, uint8_t *stream, int len);
     // typedef uint32_t (*TimerCallback)(uint32_t delay, void *param);
 
-    // PlayerInput input;
+    fn input(&self) -> &PlayerInput;
+    fn input_mut(&mut self) -> &mut PlayerInput;
 
     fn init(&mut self, title: &str);
     fn destroy(&mut self);

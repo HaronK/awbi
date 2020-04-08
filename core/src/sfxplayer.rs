@@ -3,6 +3,7 @@ use crate::mixer::*;
 use crate::resource::*;
 use crate::serializer::*;
 use crate::system::*;
+use crate::reference::*;
 use anyhow::{bail, Result};
 
 #[derive(Clone, Copy, Default)]
@@ -60,6 +61,8 @@ struct SfxPattern {
 	sample_volume: u16,
 }
 
+pub type SfxPlayerRef = Ref<Box<SfxPlayer>>;
+
 struct SfxPlayer {
 	mixer: MixerRef,
 	res: ResourceRef,
@@ -88,7 +91,7 @@ impl SfxPlayer {
         }
     }
 
-    fn init(&mut self) {
+    pub fn init(&mut self) {
         self.mutex = self.sys.get_mut().create_mutex();
     }
 
@@ -98,13 +101,13 @@ impl SfxPlayer {
 
     }
 
-    fn set_events_delay(&mut self, delay: u16) {
+    pub fn set_events_delay(&mut self, delay: u16) {
         // debug(DBG_SND, "SfxPlayer::setEventsDelay(%d)", delay);
         let _ = MutexStack::new(self.sys.clone(), &self.mutex);
         self.delay = delay * 60 / 7050;
     }
 
-    fn load_sfx_module(&mut self, res_num: u16, delay: u16, pos: u8) -> Result<()> {
+    pub fn load_sfx_module(&mut self, res_num: u16, delay: u16, pos: u8) -> Result<()> {
         // debug(DBG_SND, "SfxPlayer::loadSfxModule(0x%X, %d, %d)", resNum, delay, pos);
         let _ = MutexStack::new(self.sys.clone(), &self.mutex);
     
@@ -164,7 +167,7 @@ impl SfxPlayer {
         Ok(())
     }
 
-    fn start(&mut self) {
+    pub fn start(&mut self) {
         // debug(DBG_SND, "SfxPlayer::start()");
         let _ = MutexStack::new(self.sys.clone(), &self.mutex);
         self.sfx_mod.cur_pos = 0;
@@ -172,7 +175,7 @@ impl SfxPlayer {
         todo!(); // TODO: add_timer
     }
 
-    fn stop(&mut self) {
+    pub fn stop(&mut self) {
         // debug(DBG_SND, "SfxPlayer::stop()");
         let _ = MutexStack::new(self.sys.clone(), &self.mutex);
         if self.res_num != 0 {
