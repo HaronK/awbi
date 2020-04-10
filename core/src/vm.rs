@@ -737,19 +737,20 @@ impl VirtualMachine {
             assert!(freq < 40);
             self.mixer.get_mut().play_channel(channel & 3, mc, FREQUENCE_TABLE[freq as usize], u8::min(vol, 0x3F));
         }
-        
     }
     
     fn snd_play_music(&mut self, res_num: u16, delay: u16, pos: u8) {
         // debug(DBG_SND, "snd_play_music(0x%X, %d, %d)", res_num, delay, pos);
     
+        let mut player = self.player.get_mut();
+
         if res_num != 0 {
-            self.player.get_mut().load_sfx_module(res_num, delay, pos);
-            self.player.get_mut().start();
+            player.load_sfx_module(res_num, delay, pos);
+            player.start();
         } else if delay != 0 {
-            self.player.get_mut().set_events_delay(delay);
+            player.set_events_delay(delay);
         } else {
-            self.player.get_mut().stop();
+            player.stop();
         }
     }
     

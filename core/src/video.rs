@@ -418,7 +418,7 @@ impl Video {
 	}
 
 	// Blend a line in the current framebuffer (_curPagePtr1)
-	fn draw_line_blend(&mut self, x1: i16, x2: i16, color: u8) {
+	fn draw_line_blend(&mut self, x1: i16, x2: i16, _color: u8) {
 		// debug(DBG_VIDEO, "drawLineBlend(%d, %d, %d)", x1, x2, color);
 		let xmax = std::cmp::max(x1, x2);
 		let xmin = std::cmp::min(x1, x2);
@@ -490,7 +490,7 @@ impl Video {
 		}
 	}
 
-	fn draw_line_p(&mut self, x1: i16, x2: i16, color: u8) {
+	fn draw_line_p(&mut self, x1: i16, x2: i16, _color: u8) {
 		// debug(DBG_VIDEO, "drawLineP(%d, %d, %d)", x1, x2, color);
 		let xmax = std::cmp::max(x1, x2);
 		let xmin = std::cmp::min(x1, x2);
@@ -618,7 +618,7 @@ impl Video {
 		// #endif
 	}
 
-	fn copy_page_data(&mut self, src: &[u8]) {
+	fn copy_page_data(&mut self, _src: &[u8]) {
 		// debug(DBG_VIDEO, "Video::copyPagePtr()");
 		let mut src_idx = 0;
 		let mut dst_idx = 0;

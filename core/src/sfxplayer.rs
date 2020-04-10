@@ -24,9 +24,12 @@ struct SfxModule {
 impl Default for SfxModule {
     fn default() -> Self {
         Self {
-            // order_table: [0; 0x80],
-            // samples: [Default::default(); 15],
-            ..Default::default()
+            buf_offset: 0,
+            cur_pos: 0,
+            cur_order: 0,
+            num_order: 0,
+            order_table: [0; 0x80],
+            samples: [Default::default(); 15],
         }
     }
 }
@@ -188,7 +191,7 @@ impl SfxPlayer {
         todo!(); // TODO: implement
     }
 
-    fn handle_pattern(&mut self, channel: u8, pattern_data: &[u8]) {
+    fn handle_pattern(&mut self, _channel: u8, _pattern_data: &[u8]) {
         todo!(); // TODO: implement
     }
 
