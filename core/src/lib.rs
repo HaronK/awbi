@@ -1,4 +1,3 @@
-
 #![allow(dead_code, incomplete_features)]
 #![feature(const_generics)]
 

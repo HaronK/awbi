@@ -32,11 +32,11 @@ pub(crate) struct MemEntry {
     pub state: MemEntryState, // 0x0
     pub res_type: ResType,    // 0x1
     pub buf_offset: u16,      // 0x2
-    unk4: u16,            // 0x4, unused
-    rank_num: u8,         // 0x6
-    pub bank_id: u8,      // 0x7
-    pub bank_offset: u32, // 0x8 0xA
-    unk_c: u16,           // 0xC, unused
+    unk4: u16,                // 0x4, unused
+    rank_num: u8,             // 0x6
+    pub bank_id: u8,          // 0x7
+    pub bank_offset: u32,     // 0x8 0xA
+    unk_c: u16,               // 0xC, unused
     // All resources are packed (for a gain of 28% according to Chahi)
     pub packed_size: u16, // 0xE
     unk10: u16,           // 0x10, unused

@@ -1,28 +1,28 @@
 use crate::file::File;
-use crate::system::*;
-use crate::vm::*;
 use crate::mixer::*;
 use crate::parts::*;
-use crate::resource::*;
-use crate::sfxplayer::*;
-use crate::serializer::*;
-use crate::video::*;
 use crate::reference::*;
+use crate::resource::*;
+use crate::serializer::*;
+use crate::sfxplayer::*;
+use crate::system::*;
+use crate::video::*;
+use crate::vm::*;
 use anyhow::{ensure, Result};
 
 const MAX_SAVE_SLOTS: u8 = 100;
 const FORMAT_SIG: u32 = 1096242006; // 'AWSV'
 
 pub(crate) struct Engine {
-	sys: SystemRef,
-	vm: VirtualMachineRef,
-	mixer: MixerRef,
-	res: ResourceRef,
-	player: SfxPlayerRef,
-	video: VideoRef,
+    sys: SystemRef,
+    vm: VirtualMachineRef,
+    mixer: MixerRef,
+    res: ResourceRef,
+    player: SfxPlayerRef,
+    video: VideoRef,
     data_dir: String,
     save_dir: String,
-	state_slot: u8,
+    state_slot: u8,
 }
 
 impl Engine {
@@ -30,8 +30,18 @@ impl Engine {
         let mixer = Ref::new(Box::new(Mixer::new(sys.clone())));
         let res = Ref::new(Box::new(Resource::new(data_dir.into())));
         let video = Ref::new(Box::new(Video::new(res.clone(), sys.clone())));
-        let player = Ref::new(Box::new(SfxPlayer::new(mixer.clone(), res.clone(), sys.clone())));
-        let vm = Ref::new(Box::new(VirtualMachine::new(mixer.clone(), res.clone(), player.clone(), video.clone(), sys.clone())));
+        let player = Ref::new(Box::new(SfxPlayer::new(
+            mixer.clone(),
+            res.clone(),
+            sys.clone(),
+        )));
+        let vm = Ref::new(Box::new(VirtualMachine::new(
+            mixer.clone(),
+            res.clone(),
+            player.clone(),
+            video.clone(),
+            sys.clone(),
+        )));
 
         Self {
             sys,

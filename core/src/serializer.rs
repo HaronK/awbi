@@ -155,8 +155,7 @@ impl<T: AccessorWrap> AccessorWrap for Vec<T> {
     }
 }
 
-impl<T: AccessorWrap, const N: usize> AccessorWrap for [T; N]
-{
+impl<T: AccessorWrap, const N: usize> AccessorWrap for [T; N] {
     fn read(&mut self, stream: &mut File) -> Result<()> {
         for i in 0..N {
             self[i].read(stream)?;
