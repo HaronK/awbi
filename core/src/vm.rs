@@ -5,6 +5,7 @@ use crate::resource::*;
 use crate::serializer::*;
 use crate::sfxplayer::*;
 use crate::video::*;
+use crate::reference::*;
 use crate::staticres::*;
 use crate::system::*;
 use anyhow::Result;
@@ -45,7 +46,9 @@ const NUM_THREAD_FIELDS: usize = 2;
 const COLOR_BLACK: u8 = 0xFF;
 const DEFAULT_ZOOM: u16 = 0x0040;
 
-struct VirtualMachine {
+pub type VirtualMachineRef = Ref<Box<VirtualMachine>>;
+
+pub(crate) struct VirtualMachine {
 	// The type of entries in opcodeTable. This allows "fast" branching
 	// typedef void (VirtualMachine::*OpcodeStub)();
 	// static const OpcodeStub opcodeTable[];
@@ -76,7 +79,7 @@ struct VirtualMachine {
 	data_page_offset: usize,
 	stack_ptr: usize,
 	goto_next_thread: bool,
-    fast_mode: bool,
+    pub fast_mode: bool,
     
     last_time_stamp: u32,
 }
@@ -456,7 +459,7 @@ impl VirtualMachine {
         self.snd_play_music(res_num, delay, pos);
     }
     
-    fn init_for_part(&mut self, part_id: u16) {
+    pub fn init_for_part(&mut self, part_id: u16) {
         self.player.get_mut().stop();
         self.mixer.get_mut().stop_all();
     
@@ -476,7 +479,7 @@ impl VirtualMachine {
     /* 
          This is called every frames in the infinite loop.
     */
-    fn check_thread_requests(&mut self) {
+    pub fn check_thread_requests(&mut self) {
         //Check if a part switch has been requested.
         let requested_next_part = self.res.get().requested_next_part;
         if requested_next_part != 0 {
@@ -507,7 +510,7 @@ impl VirtualMachine {
         }
     }
     
-    fn host_frame(&mut self) {
+    pub fn host_frame(&mut self) {
         // Run the Virtual Machine for every active threads (one vm frame).
         // Inactive threads are marked with a thread instruction pointer set to 0xFFFF (VM_INACTIVE_THREAD).
         // A thread must feature a break opcode so the interpreter can move to the next thread.
@@ -631,8 +634,8 @@ impl VirtualMachine {
             }
         }
     }
-    
-    fn inp_update_player(&mut self) {
+
+    pub fn inp_update_player(&mut self) {
         self.sys.get_mut().process_events();
     
         if self.res.get().current_part_id() == 0x3E89 {
@@ -754,8 +757,8 @@ impl VirtualMachine {
         }
     }
     
-    pub fn save_or_load(&mut self, ser: &mut Serializer) {
-        ser.save_or_load_entries(self, Ver(1));
+    pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {
+        ser.save_or_load_entries(self, Ver(1))
     }
     
     // fn bypassProtection(&mut self)

@@ -72,7 +72,7 @@ impl<'a> Bank<'a> {
     }
 
     pub fn read(&mut self, me: &MemEntry) -> Result<Vec<u8>> {
-        let bank_name = format!("bank{:02}", me.bank_id);
+        let bank_name = format!("bank{:0>2}", me.bank_id);
 
         let mut f = File::open(&bank_name, &self.data_dir, false)?;
 

@@ -66,7 +66,7 @@ struct SfxPattern {
 
 pub type SfxPlayerRef = Ref<Box<SfxPlayer>>;
 
-struct SfxPlayer {
+pub struct SfxPlayer {
 	mixer: MixerRef,
 	res: ResourceRef,
 	sys: SystemRef,
@@ -195,10 +195,10 @@ impl SfxPlayer {
         todo!(); // TODO: implement
     }
 
-    pub fn save_or_load(&mut self, ser: &mut Serializer) {
+    pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {
         self.sys.get_mut().lock_mutex(&self.mutex);
 
-        ser.save_or_load_entries(self, Ver(2));
+        ser.save_or_load_entries(self, Ver(2))?;
 
         self.sys.get_mut().unlock_mutex(&self.mutex);
 
@@ -209,6 +209,8 @@ impl SfxPlayer {
             // self.timer_id = self.sys.get_mut().add_timer(self.delay as u32, &|_interval| { self.handle_events(); self.delay as u32 });
             todo!(); // TODO: add_timer
         }
+
+        Ok(())
     }
 }
 

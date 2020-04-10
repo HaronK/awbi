@@ -152,12 +152,12 @@ impl AccessorWrap for ResourceStorage {
 
 pub type ResourceRef = Ref<Box<Resource>>;
 
-pub struct Resource {
+pub(crate) struct Resource {
     // Video *video;
     data_dir: String,
-    pub(crate) mem_entries: Vec<MemEntry>,
-    pub(crate) requested_next_part: u16,
-    mem_buf: [u8; MEM_BLOCK_SIZE],
+    pub mem_entries: Vec<MemEntry>,
+    pub requested_next_part: u16,
+    pub mem_buf: [u8; MEM_BLOCK_SIZE],
     storage: ResourceStorage,
 }
 
@@ -228,7 +228,7 @@ impl Resource {
 
     // Read all entries from memlist.bin. Do not load anything in memory,
     // this is just a fast way to access the data later based on their id.
-    fn read_entries(&mut self) -> Result<()> {
+    pub fn read_entries(&mut self) -> Result<()> {
         let mut f = File::open("memlist.bin", &self.data_dir, false).with_context(|| {
             format!("Resource::readEntries() unable to open 'memlist.bin' file")
         })?;

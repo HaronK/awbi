@@ -217,14 +217,16 @@ impl Mixer {
         buf.iter().map(|v| (*v as i16 + 128) as u8).collect()
     }
 
-    pub fn save_or_load(&mut self, ser: &mut Serializer) {
+    pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {
         self.sys.get_mut().lock_mutex(&self.mutex);
 
         for ch in &mut self.channels {
-            ser.save_or_load_entries(ch, Ver(2));
+            ser.save_or_load_entries(ch, Ver(2))?;
         }
 
         self.sys.get_mut().unlock_mutex(&self.mutex);
+
+        Ok(())
     }
 }
 

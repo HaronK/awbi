@@ -120,7 +120,7 @@ impl Video {
         }
     }
 
-	fn init(&mut self) {
+	pub fn init(&mut self) {
 		self.palette_id_requested = NO_PALETTE_CHANGE_REQUESTED;
 
 		// TODO: is this needed?
