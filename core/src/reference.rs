@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(PartialEq, Debug, Default)]
-pub struct Ref<T>(Rc<RefCell<T>>);
+pub(crate) struct Ref<T>(Rc<RefCell<T>>);
 
 impl<T> Ref<T> {
     pub fn new(r: T) -> Self {

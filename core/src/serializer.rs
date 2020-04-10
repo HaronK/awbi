@@ -12,7 +12,7 @@ pub enum Mode {
     Load,
 }
 
-pub trait AccessorWrap {
+pub(crate) trait AccessorWrap {
     fn access(&mut self, mode: Mode, stream: &mut File) -> Result<()> {
         match mode {
             Mode::Save => self.write(stream),
@@ -176,7 +176,7 @@ impl<T: AccessorWrap, const N: usize> AccessorWrap for [T; N]
     }
 }
 
-pub struct Serializer {
+pub(crate) struct Serializer {
     stream: File,
     mode: Mode,
     data: Vec<u8>,

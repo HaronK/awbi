@@ -56,7 +56,7 @@ impl UnpackedData {
 }
 
 #[derive(Default)]
-pub struct Bank<'a> {
+pub(crate) struct Bank<'a> {
     data_dir: &'a str,
     unp_ctx: UnpackContext,
     packed: PackedData,

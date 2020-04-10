@@ -64,9 +64,9 @@ struct SfxPattern {
 	sample_volume: u16,
 }
 
-pub type SfxPlayerRef = Ref<Box<SfxPlayer>>;
+pub(crate) type SfxPlayerRef = Ref<Box<SfxPlayer>>;
 
-pub struct SfxPlayer {
+pub(crate) struct SfxPlayer {
 	mixer: MixerRef,
 	res: ResourceRef,
 	sys: SystemRef,
@@ -76,7 +76,7 @@ pub struct SfxPlayer {
 	delay: u16,
 	res_num: u16,
 	sfx_mod: SfxModule,
-	mark_var: Vec<i16>,
+	pub mark_var: Vec<i16>,
 }
 
 impl SfxPlayer {
@@ -174,8 +174,7 @@ impl SfxPlayer {
         // debug(DBG_SND, "SfxPlayer::start()");
         let _ = MutexStack::new(self.sys.clone(), &self.mutex);
         self.sfx_mod.cur_pos = 0;
-        // self.timer_id = self.sys.get_mut().add_timer(self.delay as u32, &|_interval| { self.handle_events(); self.delay as u32 });
-        todo!(); // TODO: add_timer
+        // self.timer_id = self.sys.get_mut().add_timer(self.delay as u32, &|_interval| { self.handle_events(); self.delay as u32 }); // TODO: uncomment
     }
 
     pub fn stop(&mut self) {
@@ -204,10 +203,9 @@ impl SfxPlayer {
 
         if ser.mode() == Mode::Load && self.res_num != 0 {
             let delay = self.delay;
-            self.load_sfx_module(self.res_num, 0, self.sfx_mod.cur_order);
+            self.load_sfx_module(self.res_num, 0, self.sfx_mod.cur_order)?;
             self.delay = delay;
-            // self.timer_id = self.sys.get_mut().add_timer(self.delay as u32, &|_interval| { self.handle_events(); self.delay as u32 });
-            todo!(); // TODO: add_timer
+            // self.timer_id = self.sys.get_mut().add_timer(self.delay as u32, &|_interval| { self.handle_events(); self.delay as u32 }); // TODO: uncomment
         }
 
         Ok(())

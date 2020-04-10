@@ -24,12 +24,12 @@ pub(crate) struct PlayerInput {
 type AudioCallback = dyn FnMut(usize) -> Vec<u8>;
 type TimerCallback = dyn FnMut(u32) -> u32;
 
-pub type SystemRef = Ref<Box<dyn System>>;
+pub(crate) type SystemRef = Ref<Box<dyn System>>;
 
 /*
     System is an abstract class so any find of system can be plugged underneath.
 */
-pub trait System {
+pub(crate) trait System {
     // typedef void (*AudioCallback)(void *param, uint8_t *stream, int len);
     // typedef uint32_t (*TimerCallback)(uint32_t delay, void *param);
 
@@ -61,7 +61,7 @@ pub trait System {
     fn get_offscreen_framebuffer(&mut self) -> Vec<u8>;
 }
 
-pub struct MutexStack {
+pub(crate) struct MutexStack {
     sys: SystemRef,
     mutex: Vec<u8>,
 }

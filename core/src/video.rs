@@ -66,7 +66,7 @@ const NO_PALETTE_CHANGE_REQUESTED: u8 = 0xFF;
 
 const VID_PAGE_SIZE: usize = 320 * 200 / 2;
 
-pub type VideoRef = Ref<Box<Video>>;
+pub(crate) type VideoRef = Ref<Box<Video>>;
 
 pub(crate) struct Video {
 	// typedef void (Video::*drawLine)(int16_t x1, int16_t x2, uint8_t col);
@@ -74,7 +74,7 @@ pub(crate) struct Video {
 	res: ResourceRef,
 	sys: SystemRef,
 
-	pub(crate) palette_id_requested: u8,
+	pub palette_id_requested: u8,
 	current_palette_id: u8,
 	// page_offsets: [usize; 4];
 

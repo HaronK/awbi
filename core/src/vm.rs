@@ -46,7 +46,7 @@ const NUM_THREAD_FIELDS: usize = 2;
 const COLOR_BLACK: u8 = 0xFF;
 const DEFAULT_ZOOM: u16 = 0x0040;
 
-pub type VirtualMachineRef = Ref<Box<VirtualMachine>>;
+pub(crate) type VirtualMachineRef = Ref<Box<VirtualMachine>>;
 
 pub(crate) struct VirtualMachine {
 	// The type of entries in opcodeTable. This allows "fast" branching
@@ -112,10 +112,10 @@ impl VirtualMachine {
     pub fn init(&mut self) {
         self.vm_variables = [0; VM_NUM_VARIABLES];
         self.vm_variables[0x54] = 0x81;
-        // self.vm_variables[VM_VARIABLE_RANDOM_SEED] = time(0);
+        // self.vm_variables[VM_VARIABLE_RANDOM_SEED] = time(0); // TODO: uncomment
     
         self.fast_mode = false;
-        // self.player.get_mut().mark_var = &self.vm_variables[VM_VARIABLE_MUS_MARK];
+        // self.player.get_mut().mark_var = &self.vm_variables[VM_VARIABLE_MUS_MARK]; // TODO: uncomment
 
         self.last_time_stamp = 0;
         todo!();
@@ -229,7 +229,7 @@ impl VirtualMachine {
     }
     
     // #define BYPASS_PROTECTION
-    fn op_condJmp(&mut self) {
+    fn op_cond_jmp(&mut self) {
         
         //printf("Jump : %X \n",self.page_offset()-self.res.get().seg_code_idx());
     // //FCS Whoever wrote this is patching the bytecode on the fly. This is ballzy !!
@@ -260,7 +260,7 @@ impl VirtualMachine {
         let a = if opcode & 0x80 != 0 {
             self.vm_variables[c as usize]
         } else if opcode & 0x40 != 0 {
-            (c * 256 + self.fetch_data_u8()) as i16
+            (c as i16) * 256 + self.fetch_data_u8() as i16
         } else {
             c as i16
         };
@@ -438,7 +438,7 @@ impl VirtualMachine {
         self.snd_play_sound(resource_id, freq, vol, channel);
     }
     
-    fn op_update_mem_list(&mut self) {
+    fn op_update_mem_list(&mut self) -> Result<()> {
         let resource_id = self.fetch_data_u16();
         // debug(DBG_VM, "VirtualMachine::op_update_mem_list(%d)", resource_id);
     
@@ -447,26 +447,28 @@ impl VirtualMachine {
             self.mixer.get_mut().stop_all();
             self.res.get_mut().invalidate_res();
         } else {
-            self.res.get_mut().load_parts_or_mem_entry(resource_id);
+            self.res.get_mut().load_parts_or_mem_entry(resource_id)?;
         }
+
+        Ok(())
     }
     
-    fn op_play_music(&mut self) {
+    fn op_play_music(&mut self) -> Result<()> {
         let res_num = self.fetch_data_u16();
         let delay = self.fetch_data_u16();
         let pos = self.fetch_data_u8();
         // debug(DBG_VM, "VirtualMachine::op_play_music(0x%X, %d, %d)", res_num, delay, pos);
-        self.snd_play_music(res_num, delay, pos);
+        self.snd_play_music(res_num, delay, pos)
     }
     
-    pub fn init_for_part(&mut self, part_id: u16) {
+    pub fn init_for_part(&mut self, part_id: u16) -> Result<()> {
         self.player.get_mut().stop();
         self.mixer.get_mut().stop_all();
     
         //WTF is that ?
         self.vm_variables[0xE4] = 0x14;
     
-        self.res.get_mut().setup_part(part_id);
+        self.res.get_mut().setup_part(part_id)?;
     
         //Set all thread to inactive (pc at 0xFFFF or 0xFFFE )
         self.threads_data = [[0xFF; VM_NUM_THREADS]; NUM_DATA_FIELDS];
@@ -474,16 +476,18 @@ impl VirtualMachine {
         self.vm_is_channel_active = [[0; VM_NUM_THREADS]; NUM_THREAD_FIELDS];
         
         self.threads_data[PC_OFFSET][0] = 0;
+
+        Ok(())
     }
     
     /* 
          This is called every frames in the infinite loop.
     */
-    pub fn check_thread_requests(&mut self) {
+    pub fn check_thread_requests(&mut self) -> Result<()> {
         //Check if a part switch has been requested.
         let requested_next_part = self.res.get().requested_next_part;
         if requested_next_part != 0 {
-            self.init_for_part(requested_next_part);
+            self.init_for_part(requested_next_part)?;
             self.res.get_mut().requested_next_part = 0;
         }
 
@@ -508,6 +512,8 @@ impl VirtualMachine {
                 self.threads_data[REQUESTED_PC_OFFSET][thread_id] = VM_NO_SETVEC_REQUESTED;
             }
         }
+
+        Ok(())
     }
     
     pub fn host_frame(&mut self) {
@@ -730,8 +736,8 @@ impl VirtualMachine {
         } else {
             let mut mc = MixerChunk {
                 data: (me.buf_offset + 8) as u32, // skip header
-                len: self.fetch_data_u16() * 2,
-                loop_len: self.fetch_data_u16() * 2,
+                len: 0, //self.fetch_data_u16() * 2,
+                loop_len: 0, //self.fetch_data_u16() * 2,
                 ..Default::default()
             };
             if mc.loop_len != 0 {
@@ -742,19 +748,21 @@ impl VirtualMachine {
         }
     }
     
-    fn snd_play_music(&mut self, res_num: u16, delay: u16, pos: u8) {
+    fn snd_play_music(&mut self, res_num: u16, delay: u16, pos: u8) -> Result<()> {
         // debug(DBG_SND, "snd_play_music(0x%X, %d, %d)", res_num, delay, pos);
     
         let mut player = self.player.get_mut();
 
         if res_num != 0 {
-            player.load_sfx_module(res_num, delay, pos);
+            player.load_sfx_module(res_num, delay, pos)?;
             player.start();
         } else if delay != 0 {
             player.set_events_delay(delay);
         } else {
             player.stop();
         }
+
+        Ok(())
     }
     
     pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {

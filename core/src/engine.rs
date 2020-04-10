@@ -13,7 +13,7 @@ use anyhow::{ensure, Result};
 const MAX_SAVE_SLOTS: u8 = 100;
 const FORMAT_SIG: u32 = 1096242006; // 'AWSV'
 
-pub struct Engine {
+pub(crate) struct Engine {
 	sys: SystemRef,
 	vm: VirtualMachineRef,
 	mixer: MixerRef,
@@ -26,7 +26,6 @@ pub struct Engine {
 }
 
 impl Engine {
-    // Engine(System *stub, const char *dataDir, const char *saveDir);
     fn new(sys: SystemRef, data_dir: &str, save_dir: &str) -> Self {
         let mixer = Ref::new(Box::new(Mixer::new(sys.clone())));
         let res = Ref::new(Box::new(Resource::new(data_dir.into())));
@@ -47,16 +46,18 @@ impl Engine {
         }
     }
 
-    fn run(&mut self) {
+    fn run(&mut self) -> Result<()> {
         let sys = self.sys.get();
         let mut vm = self.vm.get_mut();
 
         while !sys.input().quit {
-            vm.check_thread_requests();
+            vm.check_thread_requests()?;
             vm.inp_update_player();
-            self.process_input();
+            // self.process_input()?; // TODO: uncomment
             vm.host_frame();
         }
+
+        Ok(())
     }
 
     fn init(&mut self) -> Result<()> {
@@ -70,7 +71,7 @@ impl Engine {
         self.player.get_mut().init();
 
         //Init virtual machine, legacy way
-        self.vm.get_mut().init_for_part(GAME_PART_FIRST); // This game part is the protection screen
+        self.vm.get_mut().init_for_part(GAME_PART_FIRST)?; // This game part is the protection screen
 
         // Try to cheat here. You can jump anywhere but the VM crashes afterward.
         // Starting somewhere is probably not enough, the variables and calls return are probably missing.
@@ -86,15 +87,15 @@ impl Engine {
         Ok(())
     }
 
-    fn process_input(&mut self) {
+    fn process_input(&mut self) -> Result<()> {
         let mut sys = self.sys.get_mut();
 
         if sys.input().load {
-            self.load_game_state(self.state_slot);
+            self.load_game_state(self.state_slot)?;
             sys.input_mut().load = false;
         }
         if sys.input().save {
-            self.save_game_state(self.state_slot, "quicksave");
+            // self.save_game_state(self.state_slot, "quicksave"); // TODO: uncomment
             sys.input_mut().save = false;
         }
         if sys.input().fast_mode {
@@ -111,6 +112,8 @@ impl Engine {
             }
             sys.input_mut().state_slot = 0;
         }
+
+        Ok(())
     }
 
     // fn make_game_state_name(slot: u8) -> String {
@@ -160,7 +163,7 @@ impl Engine {
         f.read_u16()?;
 
         let mut hdrdesc = [0u8; 32];
-        f.read(&mut hdrdesc);
+        f.read(&mut hdrdesc)?;
 
         // contents
         // Serializer s(&f, Serializer::SM_LOAD, res._memPtrStart, ver);

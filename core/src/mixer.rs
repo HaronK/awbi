@@ -5,11 +5,11 @@ use crate::system::*;
 use anyhow::Result;
 
 #[derive(Default)]
-pub struct MixerChunk {
-    pub(crate) data: u32,
-    pub(crate) len: u16,
-    pub(crate) loop_pos: u16,
-    pub(crate) loop_len: u16,
+pub(crate) struct MixerChunk {
+    pub data: u32,
+    pub len: u16,
+    pub loop_pos: u16,
+    pub loop_len: u16,
 }
 
 // TODO: use proc_macro
@@ -85,7 +85,7 @@ impl AccessorWrap for MixerChannel {
 
 const AUDIO_NUM_CHANNELS: usize = 4;
 
-pub type MixerRef = Ref<Box<Mixer>>;
+pub(crate) type MixerRef = Ref<Box<Mixer>>;
 
 pub(crate) struct Mixer {
     sys: SystemRef,
@@ -109,8 +109,7 @@ impl Mixer {
     pub fn init(&mut self) {
         self.channels = Default::default();
         self.mutex = self.sys.get_mut().create_mutex();
-        // self.sys.get_mut().start_audio(&|len| self.mix(len));
-        todo!(); // TODO: start_audio
+        // self.sys.get_mut().start_audio(&|len| self.mix(len)); // TODO: uncomment
     }
 
     pub fn free(&mut self) {

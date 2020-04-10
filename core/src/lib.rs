@@ -1,10 +1,10 @@
 
+#![allow(dead_code, incomplete_features)]
 #![feature(const_generics)]
 
 mod bank;
 mod engine;
 mod file;
-mod intern;
 mod mixer;
 mod parts;
 mod reference;

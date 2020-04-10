@@ -28,23 +28,23 @@ impl MemEntryState {
 
 // This is a directory entry. When the game starts, it loads memlist.bin and
 // populate and array of MemEntry
-pub struct MemEntry {
-    pub(crate) state: MemEntryState, // 0x0
-    pub(crate) res_type: ResType,    // 0x1
-    pub(crate) buf_offset: u16,      // 0x2
+pub(crate) struct MemEntry {
+    pub state: MemEntryState, // 0x0
+    pub res_type: ResType,    // 0x1
+    pub buf_offset: u16,      // 0x2
     unk4: u16,            // 0x4, unused
     rank_num: u8,         // 0x6
-    pub(crate) bank_id: u8,      // 0x7
-    pub(crate) bank_offset: u32, // 0x8 0xA
+    pub bank_id: u8,      // 0x7
+    pub bank_offset: u32, // 0x8 0xA
     unk_c: u16,           // 0xC, unused
     // All resources are packed (for a gain of 28% according to Chahi)
-    pub(crate) packed_size: u16, // 0xE
+    pub packed_size: u16, // 0xE
     unk10: u16,           // 0x10, unused
-    pub(crate) size: u16,        // 0x12
+    pub size: u16,        // 0x12
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum ResType {
+pub(crate) enum ResType {
     Sound,
     Music,
     PolyAnim, // full screen video buffer, size=0x7D00
@@ -150,7 +150,7 @@ impl AccessorWrap for ResourceStorage {
     }
 }
 
-pub type ResourceRef = Ref<Box<Resource>>;
+pub(crate) type ResourceRef = Ref<Box<Resource>>;
 
 pub(crate) struct Resource {
     // Video *video;
@@ -368,7 +368,7 @@ impl Resource {
             self.mem_entries[video2_idx].state = MemEntryState::LoadMe;
         }
 
-        self.load_marked_as_needed();
+        self.load_marked_as_needed()?;
 
         self.storage.seg_palette_idx = palette_idx;
         self.storage.seg_code_idx = code_idx;

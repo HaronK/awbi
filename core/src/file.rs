@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use std::io::{Read, Seek, SeekFrom, Write};
 
-pub struct File {
+pub(crate) struct File {
     file_impl: Box<dyn FileImpl>,
 }
 
