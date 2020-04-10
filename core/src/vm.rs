@@ -815,21 +815,21 @@ impl VirtualMachine {
 
 impl AccessorWrap for VirtualMachine {
     fn read(&mut self, stream: &mut File) -> Result<()> {
-        self.vm_variables[..].read(stream)?;
+        self.vm_variables.read(stream)?;
         self.script_stack_calls.read(stream)?;
         self.threads_data.read(stream)?;
         self.vm_is_channel_active.read(stream)
     }
 
     fn write(&self, stream: &mut File) -> Result<()> {
-        self.vm_variables[..].write(stream)?;
+        self.vm_variables.write(stream)?;
         self.script_stack_calls.write(stream)?;
         self.threads_data.write(stream)?;
         self.vm_is_channel_active.write(stream)
     }
 
     fn size(&self) -> usize {
-        self.vm_variables[..].size()
+        self.vm_variables.size()
             + self.script_stack_calls.size()
             + self.threads_data.size()
             + self.vm_is_channel_active.size()

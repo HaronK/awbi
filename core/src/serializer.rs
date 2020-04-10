@@ -32,7 +32,7 @@ impl AccessorWrap for bool {
     }
 
     fn write(&self, stream: &mut File) -> Result<()> {
-        stream.write_u8(*self as u8)
+        stream.write_u8(if *self { 1 } else { 0 })
     }
 
     fn size(&self) -> usize {

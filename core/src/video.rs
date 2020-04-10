@@ -779,29 +779,20 @@ impl AccessorWrap for Video {
         self.current_palette_id.read(stream)?;
         self.palette_id_requested.read(stream)?;
         self.mask.read(stream)?;
-        self.pages_buf[0].read(stream)?;
-        self.pages_buf[1].read(stream)?;
-        self.pages_buf[2].read(stream)?;
-        self.pages_buf[3].read(stream)
+        self.pages_buf.read(stream)
     }
 
     fn write(&self, stream: &mut File) -> Result<()> {
         self.current_palette_id.write(stream)?;
         self.palette_id_requested.write(stream)?;
         self.mask.write(stream)?;
-        self.pages_buf[0].write(stream)?;
-        self.pages_buf[1].write(stream)?;
-        self.pages_buf[2].write(stream)?;
-        self.pages_buf[3].write(stream)
+        self.pages_buf.write(stream)
     }
 
     fn size(&self) -> usize {
         self.current_palette_id.size()
             + self.palette_id_requested.size()
             + self.mask.size()
-            + self.pages_buf[0].size()
-            + self.pages_buf[1].size()
-            + self.pages_buf[2].size()
-            + self.pages_buf[3].size()
+            + self.pages_buf.size()
     }
 }
