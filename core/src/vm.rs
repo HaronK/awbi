@@ -48,7 +48,7 @@ pub(crate) struct VirtualMachine {
     // static const let frequenceTable[];
     mixer: MixerRef,
     res: ResourceRef,
-    player: SfxPlayerRef,
+    player: SfxPlayer,
     video: Video,
     sys: SystemRef,
 
@@ -74,15 +74,11 @@ pub(crate) struct VirtualMachine {
 }
 
 impl VirtualMachine {
-    pub fn new(
-        mixer: MixerRef,
-        res: ResourceRef,
-        player: SfxPlayerRef,
-        // video: VideoRef,
-        sys: SystemRef,
-    ) -> Self {
+    pub fn new(mixer: MixerRef, res: ResourceRef, sys: SystemRef) -> Self {
         let code_idx = res.get().seg_code_idx();
+        let player = SfxPlayer::new(mixer.clone(), res.clone(), sys.clone());
         let video = Video::new(res.clone(), sys.clone());
+
         Self {
             mixer,
             res,
@@ -106,6 +102,8 @@ impl VirtualMachine {
 
     pub fn init(&mut self) {
         self.video.init();
+        self.player.init();
+
         self.vm_variables = [0; VM_NUM_VARIABLES];
         self.vm_variables[0x54] = 0x81;
         // self.vm_variables[VM_VARIABLE_RANDOM_SEED] = time(0); // TODO: uncomment
@@ -439,7 +437,7 @@ impl VirtualMachine {
         // debug(DBG_VM, "VirtualMachine::op_update_mem_list(%d)", resource_id);
 
         if resource_id == 0 {
-            self.player.get_mut().stop();
+            self.player.stop();
             self.mixer.get_mut().stop_all();
             self.res.get_mut().invalidate_res();
         } else {
@@ -458,7 +456,7 @@ impl VirtualMachine {
     }
 
     pub fn init_for_part(&mut self, part_id: u16) -> Result<()> {
-        self.player.get_mut().stop();
+        self.player.stop();
         self.mixer.get_mut().stop_all();
 
         //WTF is that ?
@@ -769,15 +767,13 @@ impl VirtualMachine {
     fn snd_play_music(&mut self, res_num: u16, delay: u16, pos: u8) -> Result<()> {
         // debug(DBG_SND, "snd_play_music(0x%X, %d, %d)", res_num, delay, pos);
 
-        let mut player = self.player.get_mut();
-
         if res_num != 0 {
-            player.load_sfx_module(res_num, delay, pos)?;
-            player.start();
+            self.player.load_sfx_module(res_num, delay, pos)?;
+            self.player.start();
         } else if delay != 0 {
-            player.set_events_delay(delay);
+            self.player.set_events_delay(delay);
         } else {
-            player.stop();
+            self.player.stop();
         }
 
         Ok(())
@@ -785,7 +781,14 @@ impl VirtualMachine {
 
     pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {
         ser.save_or_load_entries(self, Ver(1))?;
-        self.video.save_or_load(ser)
+
+        self.video.save_or_load(ser)?;
+
+        if ser.mode() == Mode::Load {
+            self.player.stop();
+        }
+
+        self.player.save_or_load(ser)
     }
 
     // fn bypassProtection(&mut self)

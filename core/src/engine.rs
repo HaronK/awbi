@@ -4,7 +4,6 @@ use crate::parts::*;
 use crate::reference::*;
 use crate::resource::*;
 use crate::serializer::*;
-use crate::sfxplayer::*;
 use crate::system::*;
 use crate::vm::*;
 use anyhow::{ensure, Result};
@@ -17,7 +16,6 @@ pub(crate) struct Engine {
     vm: VirtualMachine,
     mixer: MixerRef,
     res: ResourceRef,
-    player: SfxPlayerRef,
     data_dir: String,
     save_dir: String,
     state_slot: u8,
@@ -27,19 +25,13 @@ impl Engine {
     fn new(sys: SystemRef, data_dir: &str, save_dir: &str) -> Self {
         let mixer = Ref::new(Box::new(Mixer::new(sys.clone())));
         let res = Ref::new(Box::new(Resource::new(data_dir.into())));
-        let player = Ref::new(Box::new(SfxPlayer::new(
-            mixer.clone(),
-            res.clone(),
-            sys.clone(),
-        )));
-        let vm = VirtualMachine::new(mixer.clone(), res.clone(), player.clone(), sys.clone());
+        let vm = VirtualMachine::new(mixer.clone(), res.clone(), sys.clone());
 
         Self {
             sys,
             vm,
             mixer,
             res,
-            player,
             data_dir: data_dir.into(),
             save_dir: save_dir.into(),
             state_slot: 0,
@@ -66,7 +58,6 @@ impl Engine {
         // self.res.get_mut().allocMemBlock();
         self.res.get_mut().read_entries()?;
         self.mixer.get_mut().init();
-        self.player.get_mut().init();
 
         //Init virtual machine, legacy way
         self.vm.init_for_part(GAME_PART_FIRST)?; // This game part is the protection screen
@@ -132,7 +123,6 @@ impl Engine {
         let mut s = Serializer::new(f, Mode::Save, self.res.get().mem_buf.to_vec(), CUR_VER);
         self.vm.save_or_load(&mut s)?;
         self.res.get_mut().save_or_load(&mut s)?;
-        self.player.get_mut().save_or_load(&mut s)?;
         self.mixer.get_mut().save_or_load(&mut s)?;
 
         // debug(DBG_INFO, "Saved state to slot %d", _stateSlot);
@@ -150,7 +140,6 @@ impl Engine {
         ensure!(id == FORMAT_SIG, "Bad savegame format");
 
         // mute
-        self.player.get_mut().stop();
         self.mixer.get_mut().stop_all();
 
         // header
@@ -165,7 +154,6 @@ impl Engine {
         let mut s = Serializer::new(f, Mode::Load, self.res.get().mem_buf.to_vec(), Ver(ver));
         self.vm.save_or_load(&mut s)?;
         self.res.get_mut().save_or_load(&mut s)?;
-        self.player.get_mut().save_or_load(&mut s)?;
         self.mixer.get_mut().save_or_load(&mut s)?;
 
         // debug(DBG_INFO, "Loaded state from slot %d", _stateSlot);
