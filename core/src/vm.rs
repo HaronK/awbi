@@ -1,6 +1,7 @@
 use crate::file::*;
 use crate::mixer::*;
 use crate::parts::*;
+use crate::reference::*;
 use crate::resource::*;
 use crate::serializer::*;
 use crate::sfxplayer::*;
@@ -74,8 +75,9 @@ pub(crate) struct VirtualMachine {
 }
 
 impl VirtualMachine {
-    pub fn new(mixer: MixerRef, res: ResourceRef, sys: SystemRef) -> Self {
+    pub fn new(res: ResourceRef, sys: SystemRef) -> Self {
         let code_idx = res.get().seg_code_idx();
+        let mixer = Ref::new(Box::new(Mixer::new(sys.clone())));
         let player = SfxPlayer::new(mixer.clone(), res.clone(), sys.clone());
         let video = Video::new(res.clone(), sys.clone());
 
@@ -103,6 +105,7 @@ impl VirtualMachine {
     pub fn init(&mut self) {
         self.video.init();
         self.player.init();
+        self.mixer.get_mut().init();
 
         self.vm_variables = [0; VM_NUM_VARIABLES];
         self.vm_variables[0x54] = 0x81;
@@ -785,10 +788,13 @@ impl VirtualMachine {
         self.video.save_or_load(ser)?;
 
         if ser.mode() == Mode::Load {
+            // mute
             self.player.stop();
+            self.mixer.get_mut().stop_all();
         }
 
-        self.player.save_or_load(ser)
+        self.player.save_or_load(ser)?;
+        self.mixer.get_mut().save_or_load(ser)
     }
 
     // fn bypassProtection(&mut self)
