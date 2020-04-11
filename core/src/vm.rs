@@ -40,8 +40,6 @@ const NUM_THREAD_FIELDS: usize = 2;
 const COLOR_BLACK: u8 = 0xFF;
 const DEFAULT_ZOOM: u16 = 0x0040;
 
-pub(crate) type VirtualMachineRef = Ref<Box<VirtualMachine>>;
-
 pub(crate) struct VirtualMachine {
     // The type of entries in opcodeTable. This allows "fast" branching
     // typedef void (VirtualMachine::*OpcodeStub)();

@@ -15,7 +15,7 @@ const FORMAT_SIG: u32 = 1096242006; // 'AWSV'
 
 pub(crate) struct Engine {
     sys: SystemRef,
-    vm: VirtualMachineRef,
+    vm: VirtualMachine,
     mixer: MixerRef,
     res: ResourceRef,
     player: SfxPlayerRef,
@@ -35,13 +35,13 @@ impl Engine {
             res.clone(),
             sys.clone(),
         )));
-        let vm = Ref::new(Box::new(VirtualMachine::new(
+        let vm = VirtualMachine::new(
             mixer.clone(),
             res.clone(),
             player.clone(),
             video.clone(),
             sys.clone(),
-        )));
+        );
 
         Self {
             sys,
@@ -58,13 +58,12 @@ impl Engine {
 
     fn run(&mut self) -> Result<()> {
         let sys = self.sys.get();
-        let mut vm = self.vm.get_mut();
 
         while !sys.input().quit {
-            vm.check_thread_requests()?;
-            vm.inp_update_player();
+            self.vm.check_thread_requests()?;
+            self.vm.inp_update_player();
             // self.process_input()?; // TODO: uncomment
-            vm.host_frame();
+            self.vm.host_frame();
         }
 
         Ok(())
@@ -76,12 +75,12 @@ impl Engine {
         self.video.get_mut().init();
         // self.res.get_mut().allocMemBlock();
         self.res.get_mut().read_entries()?;
-        self.vm.get_mut().init();
+        self.vm.init();
         self.mixer.get_mut().init();
         self.player.get_mut().init();
 
         //Init virtual machine, legacy way
-        self.vm.get_mut().init_for_part(GAME_PART_FIRST)?; // This game part is the protection screen
+        self.vm.init_for_part(GAME_PART_FIRST)?; // This game part is the protection screen
 
         // Try to cheat here. You can jump anywhere but the VM crashes afterward.
         // Starting somewhere is probably not enough, the variables and calls return are probably missing.
@@ -101,7 +100,7 @@ impl Engine {
         let mut sys = self.sys.get_mut();
 
         if sys.input().load {
-            self.load_game_state(self.state_slot)?;
+            // self.load_game_state(self.state_slot)?; // TODO: uncomment
             sys.input_mut().load = false;
         }
         if sys.input().save {
@@ -109,9 +108,7 @@ impl Engine {
             sys.input_mut().save = false;
         }
         if sys.input().fast_mode {
-            let mut vm = self.vm.get_mut();
-
-            vm.fast_mode = !vm.fast_mode;
+            self.vm.fast_mode = !self.vm.fast_mode;
             sys.input_mut().fast_mode = false;
         }
         if sys.input().state_slot != 0 {
@@ -144,7 +141,7 @@ impl Engine {
 
         // contents
         let mut s = Serializer::new(f, Mode::Save, self.res.get().mem_buf.to_vec(), CUR_VER);
-        self.vm.get_mut().save_or_load(&mut s)?;
+        self.vm.save_or_load(&mut s)?;
         self.res.get_mut().save_or_load(&mut s)?;
         self.video.get_mut().save_or_load(&mut s)?;
         self.player.get_mut().save_or_load(&mut s)?;
@@ -155,7 +152,7 @@ impl Engine {
         Ok(())
     }
 
-    fn load_game_state(&self, slot: u8) -> Result<()> {
+    fn load_game_state(&mut self, slot: u8) -> Result<()> {
         let state_file = format!("raw.s{:0>2}", slot);
 
         let mut f = File::open(&state_file, &self.save_dir, false)?;
@@ -178,7 +175,7 @@ impl Engine {
         // contents
         // Serializer s(&f, Serializer::SM_LOAD, res._memPtrStart, ver);
         let mut s = Serializer::new(f, Mode::Load, self.res.get().mem_buf.to_vec(), Ver(ver));
-        self.vm.get_mut().save_or_load(&mut s)?;
+        self.vm.save_or_load(&mut s)?;
         self.res.get_mut().save_or_load(&mut s)?;
         self.video.get_mut().save_or_load(&mut s)?;
         self.player.get_mut().save_or_load(&mut s)?;
