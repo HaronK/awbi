@@ -1,5 +1,4 @@
 use crate::file::File;
-use crate::reference::Ref;
 use crate::resource::*;
 use crate::serializer::*;
 use crate::staticres::*;
@@ -65,8 +64,6 @@ pub const END_OF_STRING_DICTIONARY: u16 = 0xFFFF;
 const NO_PALETTE_CHANGE_REQUESTED: u8 = 0xFF;
 
 const VID_PAGE_SIZE: usize = 320 * 200 / 2;
-
-pub(crate) type VideoRef = Ref<Box<Video>>;
 
 pub(crate) struct Video {
     // typedef void (Video::*drawLine)(int16_t x1, int16_t x2, uint8_t col);

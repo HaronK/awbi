@@ -1,7 +1,6 @@
 use crate::file::*;
 use crate::mixer::*;
 use crate::parts::*;
-use crate::reference::*;
 use crate::resource::*;
 use crate::serializer::*;
 use crate::sfxplayer::*;
@@ -50,7 +49,7 @@ pub(crate) struct VirtualMachine {
     mixer: MixerRef,
     res: ResourceRef,
     player: SfxPlayerRef,
-    video: VideoRef,
+    video: Video,
     sys: SystemRef,
 
     vm_variables: [i16; VM_NUM_VARIABLES],
@@ -79,10 +78,11 @@ impl VirtualMachine {
         mixer: MixerRef,
         res: ResourceRef,
         player: SfxPlayerRef,
-        video: VideoRef,
+        // video: VideoRef,
         sys: SystemRef,
     ) -> Self {
         let code_idx = res.get().seg_code_idx();
+        let video = Video::new(res.clone(), sys.clone());
         Self {
             mixer,
             res,
@@ -105,6 +105,7 @@ impl VirtualMachine {
     }
 
     pub fn init(&mut self) {
+        self.video.init();
         self.vm_variables = [0; VM_NUM_VARIABLES];
         self.vm_variables[0x54] = 0x81;
         // self.vm_variables[VM_VARIABLE_RANDOM_SEED] = time(0); // TODO: uncomment
@@ -280,7 +281,7 @@ impl VirtualMachine {
     fn op_set_palette(&mut self) {
         let palette_id = self.fetch_data_u16();
         // debug(DBG_VM, "VirtualMachine::op_changePalette(%d)", palette_id);
-        self.video.get_mut().palette_id_requested = (palette_id >> 8) as u8;
+        self.video.palette_id_requested = (palette_id >> 8) as u8;
     }
 
     fn op_reset_thread(&mut self) {
@@ -318,21 +319,21 @@ impl VirtualMachine {
     fn op_select_video_page(&mut self) {
         let frame_buffer_id = self.fetch_data_u8() as usize;
         // debug(DBG_VM, "VirtualMachine::op_select_video_page(%d)", frame_buffer_id);
-        self.video.get_mut().change_page_off1(frame_buffer_id);
+        self.video.change_page_off1(frame_buffer_id);
     }
 
     fn op_fill_video_page(&mut self) {
         let page_id = self.fetch_data_u8() as usize;
         let color = self.fetch_data_u8();
         // debug(DBG_VM, "VirtualMachine::op_fill_video_page(%d, %d)", page_id, color);
-        self.video.get_mut().fill_page(page_id, color);
+        self.video.fill_page(page_id, color);
     }
 
     fn op_copy_video_page(&mut self) {
         let src_page_id = self.fetch_data_u8() as usize;
         let dst_page_id = self.fetch_data_u8() as usize;
         // debug(DBG_VM, "VirtualMachine::op_copy_video_page(%d, %d)", src_page_id, dst_page_id);
-        self.video.get_mut().copy_page(
+        self.video.copy_page(
             src_page_id,
             dst_page_id,
             self.vm_variables[VM_VARIABLE_SCROLL_Y],
@@ -369,7 +370,7 @@ impl VirtualMachine {
         //WTF ?
         self.vm_variables[0xF7] = 0;
 
-        self.video.get_mut().update_display(page_id);
+        self.video.update_display(page_id);
     }
 
     fn op_kill_thread(&mut self) {
@@ -386,7 +387,7 @@ impl VirtualMachine {
 
         // debug(DBG_VM, "VirtualMachine::op_draw_string(0x%03X, %d, %d, %d)", string_id, x, y, color);
 
-        self.video.get_mut().draw_string(color, x, y, string_id);
+        self.video.draw_string(color, x, y, string_id);
     }
 
     fn op_sub(&mut self) {
@@ -567,13 +568,9 @@ impl VirtualMachine {
                 // This switch the polygon database to "cinematic" and probably draws a black polygon
                 // over all the screen.
                 self.video
-                    .get_mut()
                     .set_data_page(self.res.get().seg_cinematic_idx(), off);
-                self.video.get_mut().read_and_draw_polygon(
-                    COLOR_BLACK,
-                    DEFAULT_ZOOM,
-                    &Point::new(x, y),
-                );
+                self.video
+                    .read_and_draw_polygon(COLOR_BLACK, DEFAULT_ZOOM, &Point::new(x, y));
 
                 continue;
             }
@@ -628,7 +625,7 @@ impl VirtualMachine {
                 }
                 // debug(DBG_VIDEO, "vid_opcd_0x40 : off=0x%X x=%d y=%d", off, x, y);
 
-                self.video.get_mut().set_data_page(
+                self.video.set_data_page(
                     if self.res.get().use_seg_video2() {
                         self.res.get().seg_video2_idx()
                     } else {
@@ -637,7 +634,6 @@ impl VirtualMachine {
                     off,
                 );
                 self.video
-                    .get_mut()
                     .read_and_draw_polygon(0xFF, zoom, &Point::new(x, y));
 
                 continue;
@@ -788,7 +784,8 @@ impl VirtualMachine {
     }
 
     pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {
-        ser.save_or_load_entries(self, Ver(1))
+        ser.save_or_load_entries(self, Ver(1))?;
+        self.video.save_or_load(ser)
     }
 
     // fn bypassProtection(&mut self)

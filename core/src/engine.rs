@@ -6,7 +6,6 @@ use crate::resource::*;
 use crate::serializer::*;
 use crate::sfxplayer::*;
 use crate::system::*;
-use crate::video::*;
 use crate::vm::*;
 use anyhow::{ensure, Result};
 
@@ -19,7 +18,6 @@ pub(crate) struct Engine {
     mixer: MixerRef,
     res: ResourceRef,
     player: SfxPlayerRef,
-    video: VideoRef,
     data_dir: String,
     save_dir: String,
     state_slot: u8,
@@ -29,19 +27,12 @@ impl Engine {
     fn new(sys: SystemRef, data_dir: &str, save_dir: &str) -> Self {
         let mixer = Ref::new(Box::new(Mixer::new(sys.clone())));
         let res = Ref::new(Box::new(Resource::new(data_dir.into())));
-        let video = Ref::new(Box::new(Video::new(res.clone(), sys.clone())));
         let player = Ref::new(Box::new(SfxPlayer::new(
             mixer.clone(),
             res.clone(),
             sys.clone(),
         )));
-        let vm = VirtualMachine::new(
-            mixer.clone(),
-            res.clone(),
-            player.clone(),
-            video.clone(),
-            sys.clone(),
-        );
+        let vm = VirtualMachine::new(mixer.clone(), res.clone(), player.clone(), sys.clone());
 
         Self {
             sys,
@@ -49,7 +40,6 @@ impl Engine {
             mixer,
             res,
             player,
-            video,
             data_dir: data_dir.into(),
             save_dir: save_dir.into(),
             state_slot: 0,
@@ -72,10 +62,9 @@ impl Engine {
     fn init(&mut self) -> Result<()> {
         //Init system
         self.sys.get_mut().init("Out Of This World");
-        self.video.get_mut().init();
+        self.vm.init();
         // self.res.get_mut().allocMemBlock();
         self.res.get_mut().read_entries()?;
-        self.vm.init();
         self.mixer.get_mut().init();
         self.player.get_mut().init();
 
@@ -143,7 +132,6 @@ impl Engine {
         let mut s = Serializer::new(f, Mode::Save, self.res.get().mem_buf.to_vec(), CUR_VER);
         self.vm.save_or_load(&mut s)?;
         self.res.get_mut().save_or_load(&mut s)?;
-        self.video.get_mut().save_or_load(&mut s)?;
         self.player.get_mut().save_or_load(&mut s)?;
         self.mixer.get_mut().save_or_load(&mut s)?;
 
@@ -177,7 +165,6 @@ impl Engine {
         let mut s = Serializer::new(f, Mode::Load, self.res.get().mem_buf.to_vec(), Ver(ver));
         self.vm.save_or_load(&mut s)?;
         self.res.get_mut().save_or_load(&mut s)?;
-        self.video.get_mut().save_or_load(&mut s)?;
         self.player.get_mut().save_or_load(&mut s)?;
         self.mixer.get_mut().save_or_load(&mut s)?;
 
