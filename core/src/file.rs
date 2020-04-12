@@ -1,15 +1,18 @@
 use anyhow::{bail, Result};
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::*;
 
 pub(crate) struct File {
     file_impl: Box<dyn FileImpl>,
 }
 
 impl File {
-    pub fn open(filename: &str, directory: &str, zipped: bool) -> Result<Self> {
-        let path = format!("{}/{}", directory, filename.to_lowercase());
+    pub fn open<P: AsRef<Path>>(filename: &str, directory: P, zipped: bool) -> Result<Self> {
+        let mut path = directory.as_ref().to_path_buf().clone();
+        path.push(filename);
+
         let file_impl: Box<dyn FileImpl> = if zipped {
-            Box::new(ZipFile::open(&path)?)
+            Box::new(ZipFile::open(path)?)
         } else {
             Box::new(StdFile::open(&path)?)
         };
@@ -85,9 +88,9 @@ struct StdFile {
 }
 
 impl StdFile {
-    fn open(path: &str) -> Result<Self> {
+    fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         Ok(Self {
-            file: std::fs::File::open(path)?,
+            file: std::fs::File::open(path.as_ref())?,
         })
     }
 }
@@ -114,9 +117,9 @@ struct ZipFile {
 }
 
 impl ZipFile {
-    fn open(path: &str) -> Result<Self> {
+    fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         Ok(Self {
-            file: std::fs::File::open(path)?,
+            file: std::fs::File::open(path.as_ref())?,
         })
     }
 }

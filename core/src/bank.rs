@@ -1,8 +1,9 @@
 use crate::file::File;
 use crate::resource::MemEntry;
 use anyhow::{ensure, Result};
+use std::path::*;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct UnpackContext {
     size: u16,
     crc: u32,
@@ -56,23 +57,23 @@ impl UnpackedData {
 }
 
 #[derive(Default)]
-pub(crate) struct Bank<'a> {
-    data_dir: &'a str,
+pub(crate) struct Bank {
+    data_dir: PathBuf,
     unp_ctx: UnpackContext,
     packed: PackedData,
     unpacked: UnpackedData,
 }
 
-impl<'a> Bank<'a> {
-    pub fn new(data_dir: &'a str) -> Self {
+impl Bank {
+    pub fn new<P: AsRef<Path>>(data_dir: P) -> Self {
         Self {
-            data_dir,
+            data_dir: data_dir.as_ref().to_path_buf().clone(),
             ..Default::default()
         }
     }
 
     pub fn read(&mut self, me: &MemEntry) -> Result<Vec<u8>> {
-        let bank_name = format!("bank{:0>2}", me.bank_id);
+        let bank_name = format!("bank{:02x}", me.bank_id);
 
         let mut f = File::open(&bank_name, &self.data_dir, false)?;
 
@@ -98,14 +99,15 @@ impl<'a> Bank<'a> {
         self.unp_ctx.data_size = self.packed.read();
         self.unpacked = UnpackedData::new(self.unp_ctx.data_size as usize);
         self.unp_ctx.crc = self.packed.read();
-        self.unp_ctx.chk = 0;
+        self.unp_ctx.chk = self.packed.read();
+        self.unp_ctx.crc ^= self.unp_ctx.chk;
 
         while self.unp_ctx.data_size > 0 {
             if !self.next_chunk() {
+                self.unp_ctx.size = 1;
                 if !self.next_chunk() {
                     self.dec_unk1(3, 0);
                 } else {
-                    self.unp_ctx.size = 1;
                     self.dec_unk2(8);
                 }
             } else {
@@ -142,10 +144,13 @@ impl<'a> Bank<'a> {
     fn dec_unk2(&mut self, num_chunks: u8) {
         let i = self.get_code(num_chunks) as usize;
         let count = self.unp_ctx.size + 1;
-        // debug(DBG_BANK, "Bank::decUnk2(%d) i=%d count=%d", numChunks, i, count);
         self.unp_ctx.data_size -= count as u32;
+
+        // println!("dec_unk2({}): i={} count={} unp_pos={} size={}",
+        //     num_chunks, i, count, self.unpacked.pos, self.unpacked.data.len());
+
         for _ in 0..count {
-            let val = self.packed.data[self.unpacked.pos + i - 1];
+            let val = self.unpacked.data[self.unpacked.pos + i - 1];
             self.unpacked.write(val);
         }
     }

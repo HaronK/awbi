@@ -4,8 +4,9 @@ use crate::parts::*;
 use crate::reference::*;
 use crate::serializer::*;
 use anyhow::{bail, ensure, Context, Result};
+use std::path::*;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum MemEntryState {
     NotNeeded,
     Loaded,
@@ -28,6 +29,7 @@ impl MemEntryState {
 
 // This is a directory entry. When the game starts, it loads memlist.bin and
 // populate and array of MemEntry
+#[derive(Debug)]
 pub(crate) struct MemEntry {
     pub state: MemEntryState, // 0x0
     pub res_type: ResType,    // 0x1
@@ -41,9 +43,10 @@ pub(crate) struct MemEntry {
     pub packed_size: u16, // 0xE
     unk10: u16,           // 0x10, unused
     pub size: u16,        // 0x12
+    buffer: Vec<u8>,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum ResType {
     Sound,
     Music,
@@ -56,26 +59,27 @@ pub(crate) enum ResType {
     Palette, // palette (1024=vga + 1024=ega), size=2048
     Bytecode,
     PolyCinematic,
+
+    Unknown(u8),
 }
 
 impl ResType {
-    fn new(code: u8) -> Result<Self> {
-        let res = match code {
+    fn new(code: u8) -> Self {
+        match code {
             0 => ResType::Sound,
             1 => ResType::Music,
             2 => ResType::PolyAnim,
             3 => ResType::Palette,
             4 => ResType::Bytecode,
             5 => ResType::PolyCinematic,
-            _ => bail!("Unknown resource type {}", code),
-        };
-        Ok(res)
+            _ => ResType::Unknown(code),
+        }
     }
 }
 
 const MEM_BLOCK_SIZE: usize = 600 * 1024; //600kb total memory consumed (not taking into account stack and static heap)
 
-fn read_bank(data_dir: &str, me: &MemEntry) -> Result<Vec<u8>> {
+fn read_bank<P: AsRef<Path>>(data_dir: P, me: &MemEntry) -> Result<Vec<u8>> {
     let mut bk = Bank::new(data_dir);
     let res = bk
         .read(me)
@@ -89,9 +93,8 @@ fn read_bank(data_dir: &str, me: &MemEntry) -> Result<Vec<u8>> {
     Ok(res)
 }
 
-#[derive(Default)]
 struct ResourceStorage {
-    loaded_list: Vec<u8>,
+    loaded_list: [u8; 64],
     current_part_id: u16,
     script_bak_off: usize,
     script_cur_off: usize,
@@ -102,6 +105,24 @@ struct ResourceStorage {
     seg_code_idx: usize,
     seg_cinematic_idx: usize,
     seg_video2_idx: usize,
+}
+
+impl Default for ResourceStorage {
+    fn default() -> Self {
+        Self {
+            loaded_list: [0; 64],
+            current_part_id: 0,
+            script_bak_off: 0,
+            script_cur_off: 0,
+            vid_bak_off: 0,
+            vid_cur_off: 0,
+            use_seg_video2: false,
+            seg_palette_idx: 0,
+            seg_code_idx: 0,
+            seg_cinematic_idx: 0,
+            seg_video2_idx: 0,
+        }
+    }
 }
 
 // TODO: use proc_macro
@@ -153,8 +174,7 @@ impl AccessorWrap for ResourceStorage {
 pub(crate) type ResourceRef = Ref<Box<Resource>>;
 
 pub(crate) struct Resource {
-    // Video *video;
-    data_dir: String,
+    data_dir: PathBuf,
     pub mem_entries: Vec<MemEntry>,
     pub requested_next_part: u16,
     pub mem_buf: [u8; MEM_BLOCK_SIZE],
@@ -162,10 +182,9 @@ pub(crate) struct Resource {
 }
 
 impl Resource {
-    // Resource(Video *vid, const char *dataDir);
-    pub fn new(data_dir: &str) -> Self {
+    pub fn new<P: AsRef<Path>>(data_dir: P) -> Self {
         Self {
-            data_dir: data_dir.to_string(),
+            data_dir: data_dir.as_ref().to_path_buf().clone(),
             mem_entries: Vec::new(),
             requested_next_part: 0,
             mem_buf: [0; MEM_BLOCK_SIZE],
@@ -197,8 +216,8 @@ impl Resource {
         self.storage.seg_video2_idx
     }
 
-    pub fn data_dir(&self) -> String {
-        self.data_dir.clone()
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
     }
 
     pub fn memset(&mut self, offset: usize, val: u8, size: usize) {
@@ -230,13 +249,16 @@ impl Resource {
     // this is just a fast way to access the data later based on their id.
     pub fn read_entries(&mut self) -> Result<()> {
         let mut f = File::open("memlist.bin", &self.data_dir, false).with_context(|| {
-            format!("Resource::readEntries() unable to open 'memlist.bin' file")
+            format!(
+                "Resource::readEntries() unable to open '{:?}/memlist.bin' file",
+                self.data_dir
+            )
         })?;
 
         loop {
             let mem_entry = MemEntry {
                 state: MemEntryState::new(f.read_u8()?)?,
-                res_type: ResType::new(f.read_u8()?)?,
+                res_type: ResType::new(f.read_u8()?),
                 buf_offset: f.read_u16()?,
                 unk4: f.read_u16()?,
                 rank_num: f.read_u8()?,
@@ -246,6 +268,7 @@ impl Resource {
                 packed_size: f.read_u16()?,
                 unk10: f.read_u16()?,
                 size: f.read_u16()?,
+                buffer: Vec::new(),
             };
 
             if mem_entry.state == MemEntryState::EndOfMemList {
@@ -284,7 +307,8 @@ impl Resource {
                         todo!(); // TODO:
                     } else {
                         let off = me.buf_offset as usize;
-                        self.mem_buf[off..off + data.len()].copy_from_slice(&data);
+                        // self.mem_buf[off..off + data.len()].copy_from_slice(&data);
+                        me.buffer = data;
                         me.state = MemEntryState::Loaded;
                         self.storage.script_cur_off += me.size as usize;
                     }
@@ -297,23 +321,15 @@ impl Resource {
         Ok(())
     }
 
-    fn invalidate_all(&mut self) {
-        // for me in &mut self.mem_entries {
-        //     if me.res_type == ResType::PolyAnim {
-        //         me.state = MemEntryState::NotNeeded;
-        //     }
-        // }
+    pub fn invalidate_res(&mut self) {
         self.mem_entries
             .iter_mut()
-            .filter(|me| me.res_type == ResType::PolyAnim)
+            .filter(|me| me.res_type != ResType::Palette && me.res_type != ResType::Bytecode)
             .for_each(|me| me.state = MemEntryState::NotNeeded);
         self.storage.script_cur_off = self.storage.script_bak_off;
     }
 
-    pub fn invalidate_res(&mut self) {
-        // for me in &mut self.mem_entries {
-        //     me.state = MemEntryState::NotNeeded;
-        // }
+    fn invalidate_all(&mut self) {
         self.mem_entries
             .iter_mut()
             .for_each(|me| me.state = MemEntryState::NotNeeded);
@@ -398,8 +414,8 @@ impl Resource {
         Ok(())
     }
 
-    fn reset_mem_block(&mut self) {
-        self.mem_buf = [0; MEM_BLOCK_SIZE];
+    pub fn reset_mem_block(&mut self) {
+        self.mem_buf = [0; MEM_BLOCK_SIZE]; // TODO: faster cleanup?
         self.storage.script_bak_off = 0;
         self.storage.script_cur_off = 0;
         self.storage.vid_bak_off = MEM_BLOCK_SIZE - 0x800 * 16; //0x800 = 2048, so we have 32KB free for vidBack and vidCur
@@ -407,11 +423,11 @@ impl Resource {
     }
 
     pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {
-        self.storage.loaded_list = vec![0; 64];
-
         if ser.mode() == Mode::Save {
             let mut ll_idx = 0;
             let mut mem_buf_idx = 0;
+
+            self.storage.loaded_list = [0; 64];
 
             loop {
                 let mut mem_entry = None;
@@ -439,10 +455,66 @@ impl Resource {
             for me in &mut self.mem_entries {
                 let buf = read_bank(&self.data_dir, me)?;
                 me.buf_offset = self.mem_buf.len() as u16;
-                self.mem_buf[mem_buf_idx..mem_buf_idx + buf.len()].copy_from_slice(&buf); // TODO: optimize by reading in read_bank into the slice instead of returning vec
+                // self.mem_buf[mem_buf_idx..mem_buf_idx + buf.len()].copy_from_slice(&buf); // TODO: optimize by reading in read_bank into the slice instead of returning vec
+                me.buffer = buf;
                 mem_buf_idx += me.size as usize;
             }
         }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn data_dir() -> Result<PathBuf> {
+        let mut dir = std::env::current_exe()?;
+
+        // Go to project folder
+        dir.pop();
+        dir.pop();
+        dir.pop();
+        dir.pop();
+
+        dir.push("data");
+
+        Ok(dir)
+    }
+
+    #[test]
+    fn test_read_entries() -> Result<()> {
+        let data_dir = data_dir()?;
+        let mut res = Resource::new(&data_dir);
+
+        res.read_entries()?;
+
+        // println!("Entries:\n{:?}\nLen: {}", res.mem_entries, res.mem_entries.len());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_bank_packed() -> Result<()> {
+        let data_dir = data_dir()?;
+        let mut res = Resource::new(&data_dir);
+
+        res.read_entries()?;
+
+        for me in res.mem_entries {
+            println!("Entry: {:?}", me);
+
+            test_read_bank(&res.data_dir, &me)?;
+        }
+
+        Ok(())
+    }
+
+    fn test_read_bank(data_dir: &Path, me: &MemEntry) -> Result<()> {
+        let _data = read_bank(data_dir, me)?;
+        // println!("Data size: {}", data.len());
+        // println!("Data: {:?}", data);
 
         Ok(())
     }

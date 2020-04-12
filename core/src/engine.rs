@@ -6,6 +6,7 @@ use crate::serializer::*;
 use crate::system::*;
 use crate::vm::*;
 use anyhow::{ensure, Result};
+use std::path::*;
 
 const MAX_SAVE_SLOTS: u8 = 100;
 const FORMAT_SIG: u32 = 1096242006; // 'AWSV'
@@ -14,22 +15,23 @@ pub(crate) struct Engine {
     sys: SystemRef,
     vm: VirtualMachine,
     res: ResourceRef,
-    data_dir: String,
-    save_dir: String,
+    data_dir: PathBuf,
+    save_dir: PathBuf,
     state_slot: u8,
 }
 
 impl Engine {
-    fn new(sys: SystemRef, data_dir: &str, save_dir: &str) -> Self {
-        let res = Ref::new(Box::new(Resource::new(data_dir.into())));
+    fn new<P: AsRef<Path>>(sys: SystemRef, data_dir: P, save_dir: P) -> Self {
+        let data_dir = data_dir.as_ref().to_path_buf().clone();
+        let res = Ref::new(Box::new(Resource::new(&data_dir)));
         let vm = VirtualMachine::new(res.clone(), sys.clone());
 
         Self {
             sys,
             vm,
             res,
-            data_dir: data_dir.into(),
-            save_dir: save_dir.into(),
+            data_dir: data_dir,
+            save_dir: save_dir.as_ref().to_path_buf().clone(),
             state_slot: 0,
         }
     }
@@ -50,7 +52,7 @@ impl Engine {
     fn init(&mut self) -> Result<()> {
         //Init system
         self.sys.get_mut().init("Out Of This World");
-        // self.res.get_mut().allocMemBlock();
+        self.res.get_mut().reset_mem_block();
         self.res.get_mut().read_entries()?;
         self.vm.init();
 
@@ -98,12 +100,8 @@ impl Engine {
         Ok(())
     }
 
-    // fn make_game_state_name(slot: u8) -> String {
-    //     format!("raw.s{:0>2}", slot)
-    // }
-
     fn save_game_state(&mut self, slot: u8, desc: &str) -> Result<()> {
-        let state_file = format!("raw.s{:0>2}", slot);
+        let state_file = format!("raw.s{:02}", slot);
 
         let mut f = File::open(&state_file, &self.save_dir, false)?;
         // warning("Unable to save state file '%s'", stateFile);
@@ -151,7 +149,7 @@ impl Engine {
         Ok(())
     }
 
-    fn data_dir(&self) -> String {
-        self.data_dir.clone()
+    fn data_dir(&self) -> &Path {
+        &self.data_dir
     }
 }
