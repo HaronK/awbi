@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::*;
 
+#[derive(Debug)]
 pub(crate) struct File {
     file_impl: Box<dyn FileImpl>,
 }
@@ -77,12 +78,13 @@ impl File {
     }
 }
 
-trait FileImpl {
+trait FileImpl: std::fmt::Debug {
     fn seek(&mut self, off: u64) -> Result<()>;
     fn read(&mut self, buf: &mut [u8]) -> Result<()>;
     fn write(&mut self, buf: &[u8]) -> Result<()>;
 }
 
+#[derive(Debug)]
 struct StdFile {
     file: std::fs::File,
 }
@@ -112,6 +114,7 @@ impl FileImpl for StdFile {
     }
 }
 
+#[derive(Debug)]
 struct ZipFile {
     file: std::fs::File,
 }

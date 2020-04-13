@@ -32,7 +32,7 @@ pub const MEMLIST_PART_NONE: usize = 0x00;
     That would make sense since protection screen and cinematic game parts do not load MEMLIST_PART_VIDEO2.
 
 */
-pub const MEM_LIST_PARTS: [[u16; 4]; GAME_NUM_PARTS] = [
+pub const MEM_LIST_PARTS: [[u8; 4]; GAME_NUM_PARTS] = [
     //MEMLIST_PART_PALETTE   MEMLIST_PART_CODE   MEMLIST_PART_VIDEO1   MEMLIST_PART_VIDEO2
     [0x14, 0x15, 0x16, 0x00], // protection screens
     [0x17, 0x18, 0x19, 0x00], // introduction cinematic

@@ -147,7 +147,7 @@ impl Video {
         let res = self
             .res
             .get()
-            .from_mem_u8(self.data_page_idx + self.data_page_offset);
+            .from_mem_u8(self.data_page_idx, self.data_page_offset);
         self.data_page_offset += 1;
         res
     }
@@ -156,7 +156,7 @@ impl Video {
         let res = self
             .res
             .get()
-            .from_mem_be_u16(self.data_page_idx + self.data_page_offset);
+            .from_mem_be_u16(self.data_page_idx, self.data_page_offset);
         self.data_page_offset += 2;
         res
     }
@@ -607,6 +607,7 @@ impl Video {
                     q_arr[q][..h * 160].clone_from_slice(&p_arr[0][..h * 160]);
                 } else {
                     // TODO: error
+                    todo!();
                 }
             }
         }
@@ -630,7 +631,7 @@ impl Video {
                     src_idx + 8000 * 3,
                     src_idx + 8000 * 2,
                     src_idx + 8000 * 1,
-                    src_idx + 8000 * 0,
+                    src_idx, // + 8000 * 0,
                 ];
                 for _ in 0..4 {
                     let mut acc = 0;

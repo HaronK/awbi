@@ -1,5 +1,5 @@
 use crate::file::File;
-use crate::resource::MemEntry;
+use crate::memlist::MemEntry;
 use anyhow::{ensure, Result};
 use std::path::*;
 

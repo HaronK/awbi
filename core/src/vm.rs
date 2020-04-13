@@ -1,4 +1,5 @@
 use crate::file::*;
+use crate::memlist::*;
 use crate::mixer::*;
 use crate::parts::*;
 use crate::reference::*;
@@ -8,7 +9,11 @@ use crate::sfxplayer::*;
 use crate::staticres::*;
 use crate::system::*;
 use crate::video::*;
-use anyhow::Result;
+use anyhow::{bail, Result};
+
+use trace::trace;
+
+trace::init_depth_var!();
 
 const VM_NUM_THREADS: usize = 64;
 const VM_NUM_VARIABLES: usize = 256;
@@ -102,6 +107,7 @@ impl VirtualMachine {
         }
     }
 
+    #[trace]
     pub fn init(&mut self) {
         self.video.init();
         self.player.init();
@@ -109,13 +115,10 @@ impl VirtualMachine {
 
         self.vm_variables = [0; VM_NUM_VARIABLES];
         self.vm_variables[0x54] = 0x81;
-        // self.vm_variables[VM_VARIABLE_RANDOM_SEED] = time(0); // TODO: uncomment
+        self.vm_variables[VM_VARIABLE_RANDOM_SEED] = 0; //time(0); // TODO: fix this
 
         self.fast_mode = false;
-        // self.player.get_mut().mark_var = &self.vm_variables[VM_VARIABLE_MUS_MARK]; // TODO: uncomment
-
-        self.last_time_stamp = 0;
-        todo!();
+        // self.player.mark_var = &self.vm_variables[VM_VARIABLE_MUS_MARK]; // TODO: uncomment
     }
 
     fn page_offset(&self) -> usize {
@@ -123,13 +126,19 @@ impl VirtualMachine {
     }
 
     fn fetch_data_u8(&mut self) -> u8 {
-        let res = self.res.get().from_mem_u8(self.page_offset());
+        let res = self
+            .res
+            .get()
+            .from_mem_u8(self.data_page_idx, self.page_offset());
         self.data_page_offset += 1;
         res
     }
 
     fn fetch_data_u16(&mut self) -> u16 {
-        let res = self.res.get().from_mem_be_u16(self.page_offset());
+        let res = self
+            .res
+            .get()
+            .from_mem_be_u16(self.data_page_idx, self.page_offset());
         self.data_page_offset += 2;
         res
     }
@@ -137,14 +146,24 @@ impl VirtualMachine {
     fn op_mov_const(&mut self) {
         let variable_id = self.fetch_data_u8() as usize;
         let value = self.fetch_data_u16() as i16;
-        // debug(DBG_VM, "VirtualMachine::op_movConst(0x%02X, %d)", variable_id, value);
+
+        println!(
+            "\t[0x{:04x}:0x{:04x}] MOVC 0x{:02x}, {}",
+            self.data_page_idx, self.data_page_offset, variable_id, value
+        );
+
         self.vm_variables[variable_id] = value;
     }
 
     fn op_mov(&mut self) {
         let dst_variable_id = self.fetch_data_u8() as usize;
         let src_variable_id = self.fetch_data_u8() as usize;
-        // debug(DBG_VM, "VirtualMachine::op_mov(0x%02X, 0x%02X)", dst_variable_id, src_variable_id);
+
+        println!(
+            "\t[0x{:04x}:0x{:04x}] MOV 0x{:02x}, 0x{:02x}",
+            self.data_page_idx, self.data_page_offset, dst_variable_id, src_variable_id
+        );
+
         self.vm_variables[dst_variable_id] = self.vm_variables[src_variable_id];
     }
 
@@ -458,6 +477,7 @@ impl VirtualMachine {
         self.snd_play_music(res_num, delay, pos)
     }
 
+    #[trace]
     pub fn init_for_part(&mut self, part_id: u16) -> Result<()> {
         self.player.stop();
         self.mixer.get_mut().stop_all();
@@ -515,7 +535,8 @@ impl VirtualMachine {
         Ok(())
     }
 
-    pub fn host_frame(&mut self) {
+    #[trace]
+    pub fn host_frame(&mut self) -> Result<()> {
         // Run the Virtual Machine for every active threads (one vm frame).
         // Inactive threads are marked with a thread instruction pointer set to 0xFFFF (VM_INACTIVE_THREAD).
         // A thread must feature a break opcode so the interpreter can move to the next thread.
@@ -536,7 +557,7 @@ impl VirtualMachine {
 
                 self.goto_next_thread = false;
                 // debug(DBG_VM, "VirtualMachine::host_frame() i=0x%02X n=0x%02X *p=0x%02X", thread_id, n, *self.page_offset());
-                self.execute_thread();
+                self.execute_thread()?;
 
                 //Since .pc is going to be modified by this next loop iteration, we need to save it.
                 self.threads_data[PC_OFFSET][thread_id] = self.data_page_offset as u16;
@@ -547,15 +568,19 @@ impl VirtualMachine {
                 }
             }
         }
+
+        Ok(())
     }
 
-    fn execute_thread(&mut self) {
+    #[trace]
+    fn execute_thread(&mut self) -> Result<()> {
         while !self.goto_next_thread {
             let opcode = self.fetch_data_u8();
+            println!("\topcode=0x{:02x}", opcode);
 
             // 1000 0000 is set
             if opcode & 0x80 != 0 {
-                let off = (((opcode << 8) | self.fetch_data_u8()) * 2) as usize;
+                let off = (((opcode as usize) << 8) | (self.fetch_data_u8() as usize)) * 2;
                 self.res.get_mut().set_use_seg_video2(false);
                 let mut x = self.fetch_data_u8() as i16;
                 let mut y = self.fetch_data_u8() as i16;
@@ -564,7 +589,7 @@ impl VirtualMachine {
                     y = 199;
                     x += h;
                 }
-                // debug(DBG_VIDEO, "vid_opcd_0x80 : opcode=0x%X off=0x%X x=%d y=%d", opcode, off, x, y);
+                println!("\tvid_opcd_0x80: off=0x{:x} x={} y={}", off, x, y);
 
                 // This switch the polygon database to "cinematic" and probably draws a black polygon
                 // over all the screen.
@@ -624,7 +649,7 @@ impl VirtualMachine {
                     self.data_page_offset -= 1;
                     zoom = DEFAULT_ZOOM;
                 }
-                // debug(DBG_VIDEO, "vid_opcd_0x40 : off=0x%X x=%d y=%d", off, x, y);
+                println!("\tvid_opcd_0x40: off=0x{:x} x={} y={}", off, x, y);
 
                 self.video.set_data_page(
                     if self.res.get().use_seg_video2() {
@@ -640,13 +665,49 @@ impl VirtualMachine {
                 continue;
             }
 
-            if opcode > 0x1A {
-                // error("VirtualMachine::execute_thread() ec=0x%X invalid opcode=0x%X", 0xFFF, opcode);
-            } else {
-                // (this->*opcodeTable[opcode])();
-                todo!(); // TODO:
-            }
+            self.execute_opcode(opcode)?;
         }
+
+        Ok(())
+    }
+
+    #[trace]
+    fn execute_opcode(&mut self, opcode: u8) -> Result<()> {
+        match opcode {
+            0x00 => self.op_mov_const(),
+            0x01 => self.op_mov(),
+            0x02 => self.op_add(),
+            0x03 => self.op_add_const(),
+            0x04 => self.op_call(),
+            0x05 => self.op_ret(),
+            0x06 => self.op_pause_thread(),
+            0x07 => self.op_jmp(),
+            0x08 => self.op_set_set_vect(),
+            0x09 => self.op_jnz(),
+            0x0A => self.op_cond_jmp(),
+            0x0B => self.op_set_palette(),
+            0x0C => self.op_reset_thread(),
+            0x0D => self.op_select_video_page(),
+            0x0E => self.op_fill_video_page(),
+            0x0F => self.op_copy_video_page(),
+            0x10 => self.op_blit_framebuffer(),
+            0x11 => self.op_kill_thread(),
+            0x12 => self.op_draw_string(),
+            0x13 => self.op_sub(),
+            0x14 => self.op_and(),
+            0x15 => self.op_or(),
+            0x16 => self.op_shl(),
+            0x17 => self.op_shr(),
+            0x18 => self.op_play_sound(),
+            0x19 => self.op_update_mem_list()?,
+            0x1A => self.op_play_music()?,
+            _ => bail!(
+                "VirtualMachine::execute_thread() ec=0x{:04x} invalid opcode=0x{:02x}",
+                0xFFF,
+                opcode
+            ),
+        }
+        Ok(())
     }
 
     pub fn inp_update_player(&mut self) {
@@ -739,7 +800,7 @@ impl VirtualMachine {
     fn snd_play_sound(&mut self, res_num: usize, freq: u8, vol: u8, channel: u8) {
         // debug(DBG_SND, "snd_play_sound(0x%X, %d, %d, %d)", res_num, freq, vol, channel);
 
-        let me = &self.res.get_mut().mem_entries[res_num];
+        let me = &self.res.get_mut().mem_list.entries[res_num];
 
         if me.state != MemEntryState::Loaded {
             return;

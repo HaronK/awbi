@@ -1,12 +1,12 @@
 use crate::file::File;
 use anyhow::Result;
 
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq, PartialOrd, Debug)]
 pub struct Ver(pub u16);
 
 pub const CUR_VER: Ver = Ver(2);
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Mode {
     Save,
     Load,
@@ -175,6 +175,7 @@ impl<T: AccessorWrap, const N: usize> AccessorWrap for [T; N] {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct Serializer {
     stream: File,
     mode: Mode,

@@ -1,4 +1,5 @@
 use crate::file::File;
+use crate::memlist::*;
 use crate::parts::*;
 use crate::reference::*;
 use crate::resource::*;
@@ -6,7 +7,10 @@ use crate::serializer::*;
 use crate::system::*;
 use crate::vm::*;
 use anyhow::{ensure, Result};
-use std::path::*;
+
+use trace::trace;
+
+trace::init_depth_var!();
 
 const MAX_SAVE_SLOTS: u8 = 100;
 const FORMAT_SIG: u32 = 1096242006; // 'AWSV'
@@ -15,40 +19,44 @@ pub(crate) struct Engine {
     sys: SystemRef,
     vm: VirtualMachine,
     res: ResourceRef,
-    data_dir: PathBuf,
-    save_dir: PathBuf,
+    data_dir: String,
+    save_dir: String,
     state_slot: u8,
 }
 
 impl Engine {
-    fn new<P: AsRef<Path>>(sys: SystemRef, data_dir: P, save_dir: P) -> Self {
-        let data_dir = data_dir.as_ref().to_path_buf().clone();
-        let res = Ref::new(Box::new(Resource::new(&data_dir)));
+    fn new(sys: SystemRef, data_dir: &str, save_dir: &str) -> Self {
+        let mem_list = MemList::new(data_dir);
+        let res = Ref::new(Box::new(Resource::new(mem_list)));
         let vm = VirtualMachine::new(res.clone(), sys.clone());
 
         Self {
             sys,
             vm,
             res,
-            data_dir: data_dir,
-            save_dir: save_dir.as_ref().to_path_buf().clone(),
+            data_dir: data_dir.into(),
+            save_dir: save_dir.into(),
             state_slot: 0,
         }
     }
 
-    fn run(&mut self) -> Result<()> {
-        let sys = self.sys.get();
+    fn is_quit(&mut self) -> bool {
+        self.sys.get().input().quit
+    }
 
-        while !sys.input().quit {
+    #[trace]
+    fn run(&mut self) -> Result<()> {
+        while !self.is_quit() {
             self.vm.check_thread_requests()?;
             self.vm.inp_update_player();
-            // self.process_input()?; // TODO: uncomment
-            self.vm.host_frame();
+            self.process_input()?;
+            self.vm.host_frame()?;
         }
 
         Ok(())
     }
 
+    #[trace]
     fn init(&mut self) -> Result<()> {
         //Init system
         self.sys.get_mut().init("Out Of This World");
@@ -73,16 +81,19 @@ impl Engine {
         Ok(())
     }
 
+    #[trace]
     fn process_input(&mut self) -> Result<()> {
         let mut sys = self.sys.get_mut();
 
         if sys.input().load {
             // self.load_game_state(self.state_slot)?; // TODO: uncomment
             sys.input_mut().load = false;
+            todo!();
         }
         if sys.input().save {
             // self.save_game_state(self.state_slot, "quicksave"); // TODO: uncomment
             sys.input_mut().save = false;
+            todo!();
         }
         if sys.input().fast_mode {
             self.vm.fast_mode = !self.vm.fast_mode;
@@ -123,7 +134,7 @@ impl Engine {
     }
 
     fn load_game_state(&mut self, slot: u8) -> Result<()> {
-        let state_file = format!("raw.s{:0>2}", slot);
+        let state_file = format!("raw.s{:02}", slot);
 
         let mut f = File::open(&state_file, &self.save_dir, false)?;
         // warning("Unable to open state file '%s'", stateFile);
@@ -149,7 +160,89 @@ impl Engine {
         Ok(())
     }
 
-    fn data_dir(&self) -> &Path {
+    fn data_dir(&self) -> &String {
         &self.data_dir
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::*;
+
+    fn data_dir() -> Result<PathBuf> {
+        let mut dir = std::env::current_exe()?;
+
+        // Go to project folder
+        dir.pop();
+        dir.pop();
+        dir.pop();
+        dir.pop();
+
+        dir.push("data");
+
+        Ok(dir)
+    }
+
+    #[derive(Default)]
+    struct SystemMock {
+        input: PlayerInput,
+    }
+
+    impl System for SystemMock {
+        fn input(&self) -> &PlayerInput {
+            &self.input
+        }
+
+        fn input_mut(&mut self) -> &mut PlayerInput {
+            &mut self.input
+        }
+
+        fn init(&mut self, _title: &str) {}
+        fn destroy(&mut self) {}
+        fn set_palette(&mut self, _s: u8, _n: u8, _buf: &[u8]) {}
+        fn copy_rect(&mut self, _x: u16, _y: u16, _w: u16, _h: u16, _buf: &[u8], _pitch: u32) {}
+        fn process_events(&mut self) {}
+        fn sleep(&self, _duration: u32) {}
+
+        fn get_timestamp(&self) -> u32 {
+            0
+        }
+
+        fn start_audio(&mut self, _callback: &AudioCallback) {}
+        fn stop_audio(&mut self) {}
+
+        fn get_output_sample_rate(&mut self) -> u32 {
+            22050 // sound sample rate
+        }
+
+        fn add_timer(&mut self, _delay: u32, _callback: &TimerCallback) -> Vec<u8> {
+            vec![]
+        }
+
+        fn remove_timer(&mut self, _timer_id: &[u8]) {}
+
+        fn create_mutex(&mut self) -> Vec<u8> {
+            vec![]
+        }
+
+        fn destroy_mutex(&mut self, _mutex: &[u8]) {}
+        fn lock_mutex(&mut self, _mutex: &[u8]) {}
+        fn unlock_mutex(&mut self, _mutex: &[u8]) {}
+
+        fn get_offscreen_framebuffer(&mut self) -> Vec<u8> {
+            vec![]
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_engine() -> Result<()> {
+        let data_dir = data_dir()?;
+        let sys: Ref<Box<(dyn System)>> = Ref::new(Box::new(SystemMock::default()));
+        let mut engine = Engine::new(sys, data_dir.to_str().unwrap(), data_dir.to_str().unwrap());
+
+        engine.init()?;
+        engine.run()
     }
 }

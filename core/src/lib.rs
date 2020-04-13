@@ -4,6 +4,7 @@
 mod bank;
 mod engine;
 mod file;
+mod memlist;
 mod mixer;
 mod parts;
 mod reference;

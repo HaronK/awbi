@@ -8,6 +8,7 @@ pub const DIR_RIGHT: u8 = 1 << 1;
 pub const DIR_UP: u8 = 1 << 2;
 pub const DIR_DOWN: u8 = 1 << 3;
 
+#[derive(Default)]
 pub(crate) struct PlayerInput {
     pub dir_mask: u8,
     pub button: bool,
@@ -21,8 +22,8 @@ pub(crate) struct PlayerInput {
     pub state_slot: u8,
 }
 
-type AudioCallback = dyn FnMut(usize) -> Vec<u8>;
-type TimerCallback = dyn FnMut(u32) -> u32;
+pub type AudioCallback = dyn FnMut(usize) -> Vec<u8>;
+pub type TimerCallback = dyn FnMut(u32) -> u32;
 
 pub(crate) type SystemRef = Ref<Box<dyn System>>;
 
