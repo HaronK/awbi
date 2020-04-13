@@ -11,7 +11,7 @@ trace::init_depth_var!();
 
 const MEM_BLOCK_SIZE: usize = 600 * 1024; //600kb total memory consumed (not taking into account stack and static heap)
 
-struct ResourceStorage {
+struct ResourceData {
     loaded_list: [u8; 64],
     current_part_id: u16,
     script_bak_off: usize,
@@ -25,7 +25,7 @@ struct ResourceStorage {
     seg_video2_idx: usize,
 }
 
-impl Default for ResourceStorage {
+impl Default for ResourceData {
     fn default() -> Self {
         Self {
             loaded_list: [0; 64],
@@ -43,7 +43,7 @@ impl Default for ResourceStorage {
     }
 }
 
-impl std::fmt::Debug for ResourceStorage {
+impl std::fmt::Debug for ResourceData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ResourceStorage")
             .field("loaded_list.size", &self.loaded_list.len())
@@ -64,7 +64,7 @@ impl std::fmt::Debug for ResourceStorage {
 
 // TODO: use proc_macro
 
-impl AccessorWrap for ResourceStorage {
+impl AccessorWrap for ResourceData {
     fn read(&mut self, stream: &mut File) -> Result<()> {
         self.loaded_list.read(stream)?;
         self.current_part_id.read(stream)?;
@@ -114,7 +114,7 @@ pub(crate) struct Resource {
     pub mem_list: MemList,
     pub requested_next_part: u16,
     pub mem_buf: [u8; MEM_BLOCK_SIZE],
-    storage: ResourceStorage,
+    data: ResourceData,
 }
 
 impl Resource {
@@ -123,32 +123,32 @@ impl Resource {
             mem_list,
             requested_next_part: 0,
             mem_buf: [0; MEM_BLOCK_SIZE],
-            storage: Default::default(),
+            data: Default::default(),
         }
     }
 
     pub fn current_part_id(&self) -> u16 {
-        self.storage.current_part_id
+        self.data.current_part_id
     }
 
     pub fn use_seg_video2(&self) -> bool {
-        self.storage.use_seg_video2
+        self.data.use_seg_video2
     }
 
     pub fn set_use_seg_video2(&mut self, val: bool) {
-        self.storage.use_seg_video2 = val;
+        self.data.use_seg_video2 = val;
     }
 
     pub fn seg_code_idx(&self) -> usize {
-        self.storage.seg_code_idx
+        self.data.seg_code_idx
     }
 
     pub fn seg_cinematic_idx(&self) -> usize {
-        self.storage.seg_cinematic_idx
+        self.data.seg_cinematic_idx
     }
 
     pub fn seg_video2_idx(&self) -> usize {
-        self.storage.seg_video2_idx
+        self.data.seg_video2_idx
     }
 
     // pub fn data_dir(&self) -> &String {
@@ -182,7 +182,7 @@ impl Resource {
 
     // #[trace]
     pub fn read_palette(&self, offset: usize, size: usize) -> &[u8] {
-        self.mem_to_slice(self.storage.seg_palette_idx + offset, size)
+        self.mem_to_slice(self.data.seg_palette_idx + offset, size)
     }
 
     // Read all entries from memlist.bin. Do not load anything in memory,
@@ -224,7 +224,7 @@ impl Resource {
                         me.state = MemEntryState::NotNeeded;
                         todo!(); // TODO:
                     } else {
-                        if me.size as usize > self.storage.vid_bak_off - self.storage.script_cur_off {
+                        if me.size as usize > self.data.vid_bak_off - self.data.script_cur_off {
                             // warning("Resource::load() not enough memory");
                             me.state = MemEntryState::NotNeeded;
                             continue;
@@ -235,7 +235,7 @@ impl Resource {
                         self.mem_buf[off..off + data.len()].copy_from_slice(&data);
                         me.buffer = data;
                         me.state = MemEntryState::Loaded;
-                        self.storage.script_cur_off += me.size as usize;
+                        self.data.script_cur_off += me.size as usize;
                     }
                 }
             } else {
@@ -249,13 +249,13 @@ impl Resource {
     #[trace]
     pub fn invalidate_res(&mut self) {
         self.mem_list.invalidate_res();
-        self.storage.script_cur_off = self.storage.script_bak_off;
+        self.data.script_cur_off = self.data.script_bak_off;
     }
 
     #[trace]
     fn invalidate_all(&mut self) {
         self.mem_list.invalidate_all();
-        self.storage.script_cur_off = 0;
+        self.data.script_cur_off = 0;
     }
 
     #[trace]
@@ -279,7 +279,7 @@ impl Resource {
     // (as seen in memListParts).
     #[trace]
     pub fn setup_part(&mut self, part_id: u16) -> Result<()> {
-        if part_id == self.storage.current_part_id {
+        if part_id == self.data.current_part_id {
             return Ok(());
         }
 
@@ -310,14 +310,14 @@ impl Resource {
 
         self.load_marked_as_needed()?;
 
-        self.storage.seg_palette_idx = palette_idx;
-        self.storage.seg_code_idx = code_idx;
-        self.storage.seg_cinematic_idx = video_cinematic_idx;
+        self.data.seg_palette_idx = palette_idx;
+        self.data.seg_code_idx = code_idx;
+        self.data.seg_cinematic_idx = video_cinematic_idx;
 
         // This is probably a cinematic or a non interactive part of the game.
         // Player and enemy polygons are not needed.
         if video2_idx != MEMLIST_PART_NONE {
-            self.storage.seg_video2_idx = video2_idx;
+            self.data.seg_video2_idx = video2_idx;
         }
 
         println!("\tpart_idx={}", part_idx);
@@ -341,10 +341,10 @@ impl Resource {
             );
         }
 
-        self.storage.current_part_id = part_id;
+        self.data.current_part_id = part_id;
 
         // _scriptCurPtr is changed in this->load();
-        self.storage.script_bak_off = self.storage.script_cur_off;
+        self.data.script_bak_off = self.data.script_cur_off;
 
         Ok(())
     }
@@ -352,10 +352,10 @@ impl Resource {
     #[trace]
     pub fn reset_mem_block(&mut self) {
         self.mem_buf = [0; MEM_BLOCK_SIZE]; // TODO: faster cleanup?
-        self.storage.script_bak_off = 0;
-        self.storage.script_cur_off = 0;
-        self.storage.vid_bak_off = MEM_BLOCK_SIZE - 0x800 * 16; //0x800 = 2048, so we have 32KB free for vidBack and vidCur
-        self.storage.vid_cur_off = self.storage.vid_bak_off;
+        self.data.script_bak_off = 0;
+        self.data.script_cur_off = 0;
+        self.data.vid_bak_off = MEM_BLOCK_SIZE - 0x800 * 16; //0x800 = 2048, so we have 32KB free for vidBack and vidCur
+        self.data.vid_cur_off = self.data.vid_bak_off;
     }
 
     pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {
@@ -363,7 +363,7 @@ impl Resource {
             let mut ll_idx = 0;
             let mut mem_buf_idx = 0;
 
-            self.storage.loaded_list = [0; 64];
+            self.data.loaded_list = [0; 64];
 
             loop {
                 let mut mem_entry = None;
@@ -376,7 +376,7 @@ impl Resource {
                 }
 
                 if let Some((i, me)) = mem_entry {
-                    self.storage.loaded_list[ll_idx] = i as u8;
+                    self.data.loaded_list[ll_idx] = i as u8;
                     ll_idx += 1;
                     mem_buf_idx += me.size;
                 } else {
@@ -385,7 +385,7 @@ impl Resource {
             }
         }
 
-        ser.save_or_load_entries(&mut self.storage, Ver(1))?;
+        ser.save_or_load_entries(&mut self.data, Ver(1))?;
 
         if ser.mode() == Mode::Load {
             let mut mem_buf_idx = 0;
@@ -411,7 +411,7 @@ impl std::fmt::Debug for Resource {
             .field("requested_next_part", &self.requested_next_part)
             .field("mem_buf.size", &self.mem_buf.len())
             //  .field("mem_buf", &self.mem_buf[..32].iter().collect::<Vec<_>>())
-            .field("storage", &self.storage)
+            .field("data", &self.data)
             .finish()
     }
 }
