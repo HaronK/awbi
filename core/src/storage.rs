@@ -1,4 +1,6 @@
-use crate::memlist::*;
+use crate::{bank::Bank, memlist::*};
+use anyhow::Result;
+use std::io::Cursor;
 
 #[derive(Debug)]
 pub(crate) struct Storage {
@@ -20,5 +22,40 @@ impl Storage {
         &self.banks[bank_id]
     }
 
-    
+    pub fn load(&mut self) -> Result<()> {
+        let mut bank = Bank::default();
+        for i in 1..=13 {
+            let mut f = bank.read_bank(&self.data_dir, i)?;
+            let data = f.read_all()?;
+            self.banks.push(data);
+        }
+
+        self.mem_list.load()?;
+
+        for me in &mut self.mem_list.entries {
+            let mut cursor = Cursor::new(&self.banks[me.bank_id as usize - 1]);
+            let data = bank.read_entry_data(&mut cursor, &me)?;
+            me.buffer = data;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::util::data_dir;
+
+    #[test]
+    fn test_storage_load() -> Result<()> {
+        let data_dir = data_dir()?;
+        let mut storage = Storage::new(&data_dir.to_str().unwrap());
+
+        storage.load()?;
+
+        // println!("Storage:\n{:?}", storage);
+
+        Ok(())
+    }
 }

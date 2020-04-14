@@ -19,7 +19,7 @@ pub(crate) struct PlayerInput {
     pub save: bool,
     pub load: bool,
     pub fast_mode: bool,
-    pub state_slot: u8,
+    pub state_slot: i8,
 }
 
 pub type AudioCallback = dyn FnMut(usize) -> Vec<u8>;

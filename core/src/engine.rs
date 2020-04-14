@@ -12,8 +12,8 @@ use trace::trace;
 
 trace::init_depth_var!();
 
-const MAX_SAVE_SLOTS: u8 = 100;
-const FORMAT_SIG: u32 = 1096242006; // 'AWSV'
+const MAX_SAVE_SLOTS: i8 = 100;
+const FORMAT_SIG: u32 = 1_096_242_006; // 'AWSV'
 
 pub(crate) struct Engine {
     sys: SystemRef,
@@ -100,9 +100,9 @@ impl Engine {
             sys.input_mut().fast_mode = false;
         }
         if sys.input().state_slot != 0 {
-            let slot = self.state_slot + sys.input().state_slot;
+            let slot = self.state_slot as i8 + sys.input().state_slot;
             if slot >= 0 && slot < MAX_SAVE_SLOTS {
-                self.state_slot = slot;
+                self.state_slot = slot as u8;
                 // debug(DBG_INFO, "Current game state slot is %d", _stateSlot);
             }
             sys.input_mut().state_slot = 0;
@@ -168,21 +168,7 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::*;
-
-    fn data_dir() -> Result<PathBuf> {
-        let mut dir = std::env::current_exe()?;
-
-        // Go to project folder
-        dir.pop();
-        dir.pop();
-        dir.pop();
-        dir.pop();
-
-        dir.push("data");
-
-        Ok(dir)
-    }
+    use crate::util::data_dir;
 
     #[derive(Default)]
     struct SystemMock {

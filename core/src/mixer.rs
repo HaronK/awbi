@@ -189,14 +189,12 @@ impl Mixer {
                     } else {
                         p1 + 1
                     }
+                } else if p1 == ch.chunk.len as usize - 1 {
+                    // debug(DBG_SND, "Stopping sample on channel %d", i);
+                    ch.active = false;
+                    break;
                 } else {
-                    if p1 == ch.chunk.len as usize - 1 {
-                        // debug(DBG_SND, "Stopping sample on channel %d", i);
-                        ch.active = false;
-                        break;
-                    } else {
-                        p1 + 1
-                    }
+                    p1 + 1
                 };
 
                 // interpolate
@@ -240,5 +238,5 @@ fn add_clamp(a: i32, b: i32) -> i8 {
     } else if add > 127 {
         add = 127;
     }
-    return add as i8;
+    add as i8
 }

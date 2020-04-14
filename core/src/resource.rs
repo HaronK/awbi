@@ -419,21 +419,7 @@ impl std::fmt::Debug for Resource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::*;
-
-    fn data_dir() -> Result<PathBuf> {
-        let mut dir = std::env::current_exe()?;
-
-        // Go to project folder
-        dir.pop();
-        dir.pop();
-        dir.pop();
-        dir.pop();
-
-        dir.push("data");
-
-        Ok(dir)
-    }
+    use crate::util::data_dir;
 
     #[test]
     #[ignore]

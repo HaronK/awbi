@@ -1,7 +1,7 @@
 use crate::file::File;
 use crate::memlist::MemEntry;
 use anyhow::{ensure, Result};
-use std::path::*;
+use std::io::{Read, Seek, SeekFrom};
 
 #[derive(Default, Debug)]
 pub struct UnpackContext {
@@ -58,33 +58,35 @@ impl UnpackedData {
 
 #[derive(Default)]
 pub(crate) struct Bank {
-    data_dir: PathBuf,
     unp_ctx: UnpackContext,
     packed: PackedData,
     unpacked: UnpackedData,
 }
 
 impl Bank {
-    pub fn new<P: AsRef<Path>>(data_dir: P) -> Self {
-        Self {
-            data_dir: data_dir.as_ref().to_path_buf().clone(),
-            ..Default::default()
-        }
+    pub fn read(&mut self, data_dir: &str, me: &MemEntry) -> Result<Vec<u8>> {
+        let mut f = self.read_bank(data_dir, me.bank_id)?;
+
+        self.read_entry_data(&mut f.file_impl, me)
     }
 
-    pub fn read(&mut self, me: &MemEntry) -> Result<Vec<u8>> {
-        let bank_name = format!("bank{:02x}", me.bank_id);
+    pub fn read_bank(&self, data_dir: &str, bank_id: u8) -> Result<File> {
+        let bank_name = format!("bank{:02x}", bank_id);
+        File::open(&bank_name, data_dir, false)
+    }
 
-        let mut f = File::open(&bank_name, &self.data_dir, false)?;
+    pub fn read_entry_data<T: Read + Seek>(
+        &mut self,
+        src: &mut T,
+        me: &MemEntry,
+    ) -> Result<Vec<u8>> {
+        let mut buf = vec![0; me.packed_size];
 
-        f.seek(me.bank_offset as u64)?;
+        src.seek(SeekFrom::Start(me.bank_offset))?;
+        src.read_exact(&mut buf)?;
 
         // Depending if the resource is packed or not we
         // can read directly or unpack it.
-
-        let mut buf = vec![0; me.packed_size as usize];
-
-        f.read(&mut buf)?;
 
         if me.packed_size == me.size {
             Ok(buf)
@@ -97,10 +99,11 @@ impl Bank {
     fn unpack(&mut self) -> Result<Vec<u8>> {
         self.unp_ctx.size = 0;
         self.unp_ctx.data_size = self.packed.read();
-        self.unpacked = UnpackedData::new(self.unp_ctx.data_size as usize);
         self.unp_ctx.crc = self.packed.read();
         self.unp_ctx.chk = self.packed.read();
         self.unp_ctx.crc ^= self.unp_ctx.chk;
+
+        self.unpacked = UnpackedData::new(self.unp_ctx.data_size as usize);
 
         while self.unp_ctx.data_size > 0 {
             if !self.next_chunk() {
@@ -180,7 +183,7 @@ impl Bank {
         let rcf = (self.unp_ctx.chk & 1) != 0;
         self.unp_ctx.chk >>= 1;
         if cf {
-            self.unp_ctx.chk |= 0x80000000;
+            self.unp_ctx.chk |= 0x8000_0000;
         }
         rcf
     }

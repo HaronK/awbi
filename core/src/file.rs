@@ -2,14 +2,16 @@ use anyhow::{bail, Result};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::*;
 
+pub(crate) trait FileImpl: std::fmt::Debug + Read + Seek + Write {}
+
 #[derive(Debug)]
 pub(crate) struct File {
-    file_impl: Box<dyn FileImpl>,
+    pub file_impl: Box<dyn FileImpl>,
 }
 
 impl File {
     pub fn open<P: AsRef<Path>>(filename: &str, directory: P, zipped: bool) -> Result<Self> {
-        let mut path = directory.as_ref().to_path_buf().clone();
+        let mut path = directory.as_ref().to_path_buf();
         path.push(filename);
 
         let file_impl: Box<dyn FileImpl> = if zipped {
@@ -21,11 +23,19 @@ impl File {
     }
 
     pub fn seek(&mut self, off: u64) -> Result<()> {
-        self.file_impl.seek(off)
+        self.file_impl.seek(SeekFrom::Start(off))?;
+        Ok(())
+    }
+
+    pub fn read_all(&mut self) -> Result<Vec<u8>> {
+        let mut data = Vec::new();
+        self.file_impl.read_to_end(&mut data)?;
+        Ok(data)
     }
 
     pub fn read(&mut self, buf: &mut [u8]) -> Result<()> {
-        self.file_impl.read(buf)
+        self.file_impl.read_exact(buf)?;
+        Ok(())
     }
 
     pub fn read_u8(&mut self) -> Result<u8> {
@@ -49,7 +59,8 @@ impl File {
     }
 
     pub fn write(&mut self, buf: &[u8]) -> Result<()> {
-        self.file_impl.write(buf)
+        self.file_impl.write_all(buf)?;
+        Ok(())
     }
 
     pub fn write_be(&mut self, buf: &[u8]) -> Result<()> {
@@ -78,12 +89,6 @@ impl File {
     }
 }
 
-trait FileImpl: std::fmt::Debug {
-    fn seek(&mut self, off: u64) -> Result<()>;
-    fn read(&mut self, buf: &mut [u8]) -> Result<()>;
-    fn write(&mut self, buf: &[u8]) -> Result<()>;
-}
-
 #[derive(Debug)]
 struct StdFile {
     file: std::fs::File,
@@ -97,20 +102,26 @@ impl StdFile {
     }
 }
 
-impl FileImpl for StdFile {
-    fn seek(&mut self, off: u64) -> Result<()> {
-        self.file.seek(SeekFrom::Start(off))?;
-        Ok(())
-    }
+impl FileImpl for StdFile {}
 
-    fn read(&mut self, buf: &mut [u8]) -> Result<()> {
-        self.file.read_exact(buf)?;
-        Ok(())
+impl Seek for StdFile {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.file.seek(pos)
     }
+}
 
-    fn write(&mut self, buf: &[u8]) -> Result<()> {
-        self.file.write_all(buf)?;
-        Ok(())
+impl Read for StdFile {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.file.read(buf)
+    }
+}
+
+impl Write for StdFile {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.file.write(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
     }
 }
 
@@ -127,16 +138,25 @@ impl ZipFile {
     }
 }
 
-impl FileImpl for ZipFile {
-    fn seek(&mut self, _off: u64) -> Result<()> {
+impl FileImpl for ZipFile {}
+
+impl Seek for ZipFile {
+    fn seek(&mut self, _pos: SeekFrom) -> std::io::Result<u64> {
         todo!();
     }
+}
 
-    fn read(&mut self, _buf: &mut [u8]) -> Result<()> {
+impl Read for ZipFile {
+    fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
         todo!();
     }
+}
 
-    fn write(&mut self, _buf: &[u8]) -> Result<()> {
+impl Write for ZipFile {
+    fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+        todo!();
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
         todo!();
     }
 }

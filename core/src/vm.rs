@@ -596,7 +596,7 @@ impl VirtualMachine {
                 self.video
                     .set_data_page(self.res.get().seg_cinematic_idx(), off);
                 self.video
-                    .read_and_draw_polygon(COLOR_BLACK, DEFAULT_ZOOM, &Point::new(x, y));
+                    .read_and_draw_polygon(COLOR_BLACK, DEFAULT_ZOOM, Point::new(x, y));
 
                 continue;
             }
@@ -660,7 +660,7 @@ impl VirtualMachine {
                     off,
                 );
                 self.video
-                    .read_and_draw_polygon(0xFF, zoom, &Point::new(x, y));
+                    .read_and_draw_polygon(0xFF, zoom, Point::new(x, y));
 
                 continue;
             }

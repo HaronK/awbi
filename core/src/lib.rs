@@ -14,5 +14,6 @@ mod sfxplayer;
 mod staticres;
 mod storage;
 mod system;
+mod util;
 mod video;
 mod vm;

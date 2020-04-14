@@ -4,6 +4,7 @@ use crate::serializer::*;
 use crate::staticres::*;
 use crate::system::*;
 use anyhow::Result;
+use std::cmp::Ordering;
 
 struct StrEntry {
     id: u16,
@@ -83,7 +84,7 @@ pub(crate) struct Video {
     cur_page_idx3: usize,
 
     polygon: Polygon,
-    hliney: u16,
+    hliney: i16,
 
     //Precomputer division lookup table
     interp_table: [u16; 0x400],
@@ -171,7 +172,7 @@ impl Video {
     // 	- A list of object space vertices, based on a delta from the first vertex.
 
     // 	This is a recursive function.
-    pub(crate) fn read_and_draw_polygon(&mut self, mut color: u8, zoom: u16, pt: &Point) {
+    pub(crate) fn read_and_draw_polygon(&mut self, mut color: u8, zoom: u16, pt: Point) {
         let mut i = self.fetch_data_u8();
 
         // 0xc0 = 192
@@ -201,7 +202,7 @@ impl Video {
         }
     }
 
-    fn fill_polygon(&mut self, color: u8, _zoom: u16, pt: &Point) {
+    fn fill_polygon(&mut self, color: u8, _zoom: u16, pt: Point) {
         if self.polygon.bbw == 0 && self.polygon.bbh == 1 && self.polygon.num_points == 4 {
             self.draw_point(color, pt.x, pt.y);
 
@@ -217,7 +218,7 @@ impl Video {
             return;
         }
 
-        self.hliney = y1 as u16;
+        self.hliney = y1;
 
         let mut i = 0;
         let mut j = (self.polygon.num_points - 1) as usize;
@@ -251,14 +252,14 @@ impl Video {
                 break;
             }
 
-            let (step1, _) = self.calc_step(&self.polygon.points[j + 1], &self.polygon.points[j]);
-            let (step2, h) = self.calc_step(&self.polygon.points[i - 1], &self.polygon.points[i]);
+            let (step1, _) = self.calc_step(self.polygon.points[j + 1], self.polygon.points[j]);
+            let (step2, h) = self.calc_step(self.polygon.points[i - 1], self.polygon.points[i]);
 
             i += 1;
             j -= 1;
 
-            cpt1 = (cpt1 & 0xFFFF0000) | 0x7FFF;
-            cpt2 = (cpt2 & 0xFFFF0000) | 0x8000;
+            cpt1 = (cpt1 & 0xFFFF_0000) | 0x7FFF;
+            cpt2 = (cpt2 & 0xFFFF_0000) | 0x8000;
 
             if h == 0 {
                 cpt1 += step1 as u32;
@@ -275,13 +276,11 @@ impl Video {
                             if x2 > 319 {
                                 x2 = 319;
                             }
-                            // (*draw_func)(x1, x2, color);
-                            if color < 0x10 {
-                                self.draw_line_n(x1, x2, color);
-                            } else if color > 0x10 {
-                                self.draw_line_p(x1, x2, color);
-                            } else {
-                                self.draw_line_blend(x1, x2, color);
+                            // (*draw_func)(x1, x2, color); // TODO: uncomment
+                            match color.cmp(&0x10) {
+                                Ordering::Less => self.draw_line_n(x1, x2, color),
+                                Ordering::Greater => self.draw_line_p(x1, x2, color),
+                                Ordering::Equal => self.draw_line_blend(x1, x2, color),
                             }
                         }
                     }
@@ -305,8 +304,8 @@ impl Video {
     }
 
     // What is read from the bytecode is not a pure screen space polygon but a polygon space polygon.
-    fn read_and_draw_polygon_hierarchy(&mut self, zoom: u16, pgc: &Point) {
-        let mut pt = pgc.clone();
+    fn read_and_draw_polygon_hierarchy(&mut self, zoom: u16, pgc: Point) {
+        let mut pt = pgc;
         pt.x -= (self.fetch_data_u8() as u16 * zoom / 64) as i16;
         pt.y -= (self.fetch_data_u8() as u16 * zoom / 64) as i16;
 
@@ -332,13 +331,13 @@ impl Video {
             let bak = self.data_page_offset;
             self.data_page_offset = (off * 2) as usize;
 
-            self.read_and_draw_polygon(color, zoom, &po);
+            self.read_and_draw_polygon(color, zoom, po);
 
             self.data_page_offset = bak;
         }
     }
 
-    fn calc_step(&self, p1: &Point, p2: &Point) -> (i16, usize) {
+    fn calc_step(&self, p1: Point, p2: Point) -> (i16, usize) {
         let dy = (p2.y - p1.y) as usize;
         ((p2.x - p1.x) * (self.interp_table[dy] as i16) * 4, dy)
     }
@@ -423,31 +422,35 @@ impl Video {
         // debug(DBG_VIDEO, "drawLineBlend(%d, %d, %d)", x1, x2, color);
         let xmax = std::cmp::max(x1, x2);
         let xmin = std::cmp::min(x1, x2);
-        let mut off = (self.hliney * 160 + xmin as u16 / 2) as usize;
-
+        let mut off = (self.hliney * 160 + xmin / 2) as usize;
         let mut w = xmax / 2 - xmin / 2 + 1;
-        let mut cmaske = 0;
-        let mut cmasks = 0;
 
-        if xmin & 1 != 0 {
+        let cmasks = if xmin & 1 != 0 {
             w -= 1;
-            cmasks = 0xF7;
-        }
-        if xmax & 1 == 0 {
+            0xF7
+        } else {
+            0
+        };
+
+        let cmaske = if xmax & 1 == 0 {
             w -= 1;
-            cmaske = 0x7F;
-        }
+            0x7F
+        } else {
+            0
+        };
 
         if cmasks != 0 {
             self.pages_buf[self.cur_page_idx1][off] =
                 (self.pages_buf[self.cur_page_idx1][off] & cmasks) | 0x08;
             off += 1;
         }
+
         for _ in 0..w {
             self.pages_buf[self.cur_page_idx1][off] =
                 (self.pages_buf[self.cur_page_idx1][off] & 0x77) | 0x88;
             off += 1;
         }
+
         if cmaske != 0 {
             self.pages_buf[self.cur_page_idx1][off] =
                 (self.pages_buf[self.cur_page_idx1][off] & cmaske) | 0x80;
@@ -459,20 +462,22 @@ impl Video {
         // debug(DBG_VIDEO, "drawLineN(%d, %d, %d)", x1, x2, color);
         let xmax = std::cmp::max(x1, x2);
         let xmin = std::cmp::min(x1, x2);
-        let mut off = (self.hliney * 160 + xmin as u16 / 2) as usize;
-
+        let mut off = (self.hliney * 160 + xmin / 2) as usize;
         let mut w = xmax / 2 - xmin / 2 + 1;
-        let mut cmaske = 0;
-        let mut cmasks = 0;
 
-        if xmin & 1 != 0 {
+        let cmasks = if xmin & 1 != 0 {
             w -= 1;
-            cmasks = 0xF0;
-        }
-        if xmax & 1 == 0 {
+            0xF0
+        } else {
+            0
+        };
+
+        let cmaske = if xmax & 1 == 0 {
             w -= 1;
-            cmaske = 0x0F;
-        }
+            0x0F
+        } else {
+            0
+        };
 
         let colb = ((color & 0xF) << 4) | (color & 0xF);
         if cmasks != 0 {
@@ -495,20 +500,22 @@ impl Video {
         // debug(DBG_VIDEO, "drawLineP(%d, %d, %d)", x1, x2, color);
         let xmax = std::cmp::max(x1, x2);
         let xmin = std::cmp::min(x1, x2);
-        let mut off = (self.hliney * 160 + xmin as u16 / 2) as usize;
-
+        let mut off = (self.hliney * 160 + xmin / 2) as usize;
         let mut w = xmax / 2 - xmin / 2 + 1;
-        let mut cmaske = 0;
-        let mut cmasks = 0;
 
-        if xmin & 1 != 0 {
+        let cmasks = if xmin & 1 != 0 {
             w -= 1;
-            cmasks = 0xF0;
-        }
-        if xmax & 1 == 0 {
+            0xF0
+        } else {
+            0
+        };
+
+        let cmaske = if xmax & 1 == 0 {
             w -= 1;
-            cmaske = 0x0F;
-        }
+            0x0F
+        } else {
+            0
+        };
 
         if cmasks != 0 {
             self.pages_buf[self.cur_page_idx1][off] = (self.pages_buf[self.cur_page_idx1][off]
@@ -580,11 +587,11 @@ impl Video {
         if src_page >= 0xFE {
             let p = self.get_page_off(src_page);
 
-            self.pages_buf[q] = self.pages_buf[p].clone();
+            self.pages_buf[q] = self.pages_buf[p];
         } else if (src_mask & 0x80) == 0 {
             let p = self.get_page_off(src_mask);
 
-            self.pages_buf[q] = self.pages_buf[p].clone();
+            self.pages_buf[q] = self.pages_buf[p];
         } else {
             let mut p = self.get_page_off(src_page & 3);
 

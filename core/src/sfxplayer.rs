@@ -137,9 +137,9 @@ impl SfxPlayer {
             }
             self.delay *= 60 / 7050;
             self.sfx_mod.buf_offset = (me_offset as u16) + 0xC0;
-            // debug(DBG_SND, "SfxPlayer::loadSfxModule() eventDelay = %d ms", _delay);
+        // debug(DBG_SND, "SfxPlayer::loadSfxModule() eventDelay = %d ms", _delay);
 
-            // self.prepare_instruments(res, &me, me_offset + 2)?;
+        // self.prepare_instruments(res, &me, me_offset + 2)?;
         } else {
             //     warning("SfxPlayer::loadSfxModule() ec=0x%X", 0xF8);
         }
@@ -147,7 +147,12 @@ impl SfxPlayer {
         Ok(())
     }
 
-    fn prepare_instruments(&mut self, res: &mut Resource, src_me: &MemEntry, mut offset: usize) -> Result<()> {
+    fn prepare_instruments(
+        &mut self,
+        res: &mut Resource,
+        src_me: &MemEntry,
+        mut offset: usize,
+    ) -> Result<()> {
         for ins in &mut self.sfx_mod.samples {
             let res_num = src_me.from_buf_be_u16(offset as usize) as usize;
             offset += 2;

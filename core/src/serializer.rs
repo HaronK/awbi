@@ -117,8 +117,8 @@ impl AccessorWrap for usize {
 
 impl<T: AccessorWrap> AccessorWrap for [T] {
     fn read(&mut self, stream: &mut File) -> Result<()> {
-        for i in 0..self.len() {
-            self[i].read(stream)?;
+        for v in self {
+            v.read(stream)?;
         }
         Ok(())
     }
@@ -137,8 +137,8 @@ impl<T: AccessorWrap> AccessorWrap for [T] {
 
 impl<T: AccessorWrap> AccessorWrap for Vec<T> {
     fn read(&mut self, stream: &mut File) -> Result<()> {
-        for i in 0..self.len() {
-            self[i].read(stream)?;
+        for v in self {
+            v.read(stream)?;
         }
         Ok(())
     }
@@ -157,8 +157,8 @@ impl<T: AccessorWrap> AccessorWrap for Vec<T> {
 
 impl<T: AccessorWrap, const N: usize> AccessorWrap for [T; N] {
     fn read(&mut self, stream: &mut File) -> Result<()> {
-        for i in 0..N {
-            self[i].read(stream)?;
+        for v in self.iter_mut().take(N) {
+            v.read(stream)?;
         }
         Ok(())
     }

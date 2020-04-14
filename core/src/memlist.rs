@@ -61,15 +61,15 @@ impl ResType {
 pub(crate) struct MemEntry {
     pub state: MemEntryState, // 0x0
     pub res_type: ResType,    // 0x1
-    pub buf_offset: usize,      // 0x2
+    pub buf_offset: usize,    // 0x2
     unk4: u16,                // 0x4, unused
-    pub rank_num: u8,             // 0x6
+    pub rank_num: u8,         // 0x6
     pub bank_id: u8,          // 0x7
-    pub bank_offset: usize,     // 0x8 0xA
+    pub bank_offset: u64,     // 0x8 0xA
     unk_c: u16,               // 0xC, unused
-    pub packed_size: usize,     // 0xE
+    pub packed_size: usize,   // 0xE
     unk10: u16,               // 0x10, unused
-    pub size: usize,            // 0x12
+    pub size: usize,          // 0x12
     pub buffer: Vec<u8>,
 }
 
@@ -94,10 +94,10 @@ impl MemEntry {
     }
 
     pub fn read_bank(&self, data_dir: &str) -> Result<Vec<u8>> {
-        let mut bk = Bank::new(data_dir);
+        let mut bk = Bank::default();
         let res = bk
-            .read(self)
-            .with_context(|| format!("MemEntry::read_bank() unable to unpack entry"))?;
+            .read(data_dir, self)
+            .with_context(|| "MemEntry::read_bank() unable to unpack entry".to_string())?;
         ensure!(
             res.len() == self.size as usize,
             "[read_bank] Wrong buffer size. Expected {} but was {}",
@@ -138,7 +138,7 @@ impl MemList {
                 unk4: f.read_u16()?,
                 rank_num: f.read_u8()?,
                 bank_id: f.read_u8()?,
-                bank_offset: f.read_u32()? as usize,
+                bank_offset: f.read_u32()? as u64,
                 unk_c: f.read_u16()?,
                 packed_size: f.read_u16()? as usize,
                 unk10: f.read_u16()?,
