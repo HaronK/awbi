@@ -3,7 +3,7 @@ use crate::memlist::*;
 use crate::parts::*;
 use crate::reference::*;
 use crate::serializer::*;
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{ensure, Result};
 
 use trace::trace;
 
@@ -166,13 +166,13 @@ impl Resource {
     }
 
     // #[trace]
-    pub fn from_mem_u8(&self, page_idx: usize, offset: usize) -> u8 {
+    pub fn from_mem_u8(&self, _page_idx: usize, offset: usize) -> u8 {
         // self.mem_entries[page_idx].from_buf_u8(offset)
         self.mem_buf[offset]
     }
 
     // #[trace]
-    pub fn from_mem_be_u16(&self, page_idx: usize, offset: usize) -> u16 {
+    pub fn from_mem_be_u16(&self, _page_idx: usize, offset: usize) -> u16 {
         // self.mem_entries[page_idx].from_buf_be_u16(offset)
         let b1 = self.mem_buf[offset];
         let b2 = self.mem_buf[offset + 1];
@@ -393,7 +393,7 @@ impl Resource {
             for me in &mut self.mem_list.entries {
                 let buf = me.read_bank("me")?; // TODO: fix'me'
                 me.buf_offset = self.mem_buf.len();
-                // self.mem_buf[mem_buf_idx..mem_buf_idx + buf.len()].copy_from_slice(&buf); // TODO: optimize by reading in read_bank into the slice instead of returning vec
+                self.mem_buf[mem_buf_idx..mem_buf_idx + buf.len()].copy_from_slice(&buf); // TODO: optimize by reading in read_bank into the slice instead of returning vec
                 me.buffer = buf;
                 mem_buf_idx += me.size as usize;
                 todo!();
