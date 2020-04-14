@@ -2,7 +2,7 @@ use crate::file::File;
 use crate::memlist::*;
 use crate::parts::*;
 use crate::reference::*;
-use crate::serializer::*;
+use crate::{storage::Storage, serializer::*};
 use anyhow::{ensure, Result};
 
 use trace::trace;
@@ -111,16 +111,16 @@ impl AccessorWrap for ResourceData {
 pub(crate) type ResourceRef = Ref<Box<Resource>>;
 
 pub(crate) struct Resource {
-    pub mem_list: MemList,
+    pub storage: Storage,
     pub requested_next_part: u16,
     pub mem_buf: [u8; MEM_BLOCK_SIZE],
     data: ResourceData,
 }
 
 impl Resource {
-    pub fn new(mem_list: MemList) -> Self {
+    pub fn new(storage: Storage) -> Self {
         Self {
-            mem_list,
+            storage,
             requested_next_part: 0,
             mem_buf: [0; MEM_BLOCK_SIZE],
             data: Default::default(),
@@ -188,24 +188,14 @@ impl Resource {
     // Read all entries from memlist.bin. Do not load anything in memory,
     // this is just a fast way to access the data later based on their id.
     #[trace]
-    pub fn read_entries(&mut self) -> Result<()> {
-        self.mem_list.load()
+    pub fn init(&mut self) -> Result<()> {
+        self.storage.load()
     }
 
     #[trace]
     fn load_marked_as_needed(&mut self) -> Result<()> {
         loop {
-            let mut mem_entry: Option<&mut MemEntry> = None;
-
-            // get resource with max rankNum
-            let mut max_num = 0;
-
-            for me in &mut self.mem_list.entries {
-                if me.state == MemEntryState::LoadMe && max_num <= me.rank_num {
-                    max_num = me.rank_num;
-                    mem_entry = Some(me);
-                }
-            }
+            let mut mem_entry = self.storage.get_max_rank_entry_to_load();
 
             if let Some(me) = &mut mem_entry {
                 // At this point the resource descriptor should be pointed to "me"
@@ -248,22 +238,22 @@ impl Resource {
 
     #[trace]
     pub fn invalidate_res(&mut self) {
-        self.mem_list.invalidate_res();
+        self.storage.mem_list.invalidate_res();
         self.data.script_cur_off = self.data.script_bak_off;
     }
 
     #[trace]
     fn invalidate_all(&mut self) {
-        self.mem_list.invalidate_all();
+        self.storage.mem_list.invalidate_all();
         self.data.script_cur_off = 0;
     }
 
     #[trace]
     pub fn load_parts_or_mem_entry(&mut self, resource_id: u16) -> Result<()> {
-        if resource_id as usize > self.mem_list.entries.len() {
+        if resource_id as usize > self.storage.mem_list.entries.len() {
             self.requested_next_part = resource_id;
         } else {
-            let mut me = &mut self.mem_list.entries[resource_id as usize];
+            let mut me = &mut self.storage.mem_list.entries[resource_id as usize];
 
             if me.state == MemEntryState::NotNeeded {
                 me.state = MemEntryState::LoadMe;
@@ -298,14 +288,14 @@ impl Resource {
         // Mark all resources as located on hard drive.
         self.invalidate_all();
 
-        self.mem_list.entries[palette_idx].state = MemEntryState::LoadMe;
-        self.mem_list.entries[code_idx].state = MemEntryState::LoadMe;
-        self.mem_list.entries[video_cinematic_idx].state = MemEntryState::LoadMe;
+        self.storage.mem_list.entries[palette_idx].state = MemEntryState::LoadMe;
+        self.storage.mem_list.entries[code_idx].state = MemEntryState::LoadMe;
+        self.storage.mem_list.entries[video_cinematic_idx].state = MemEntryState::LoadMe;
 
         // This is probably a cinematic or a non interactive part of the game.
         // Player and enemy polygons are not needed.
         if video2_idx != MEMLIST_PART_NONE {
-            self.mem_list.entries[video2_idx].state = MemEntryState::LoadMe;
+            self.storage.mem_list.entries[video2_idx].state = MemEntryState::LoadMe;
         }
 
         self.load_marked_as_needed()?;
@@ -323,21 +313,21 @@ impl Resource {
         println!("\tpart_idx={}", part_idx);
         println!(
             "\tpalette_idx={} {:?}",
-            palette_idx, self.mem_list.entries[palette_idx].res_type
+            palette_idx, self.storage.mem_list.entries[palette_idx].res_type
         );
         println!(
             "\tcode_idx={} {:?}",
-            code_idx, self.mem_list.entries[code_idx].res_type
+            code_idx, self.storage.mem_list.entries[code_idx].res_type
         );
         println!(
             "\tvideo_cinematic_idx={} {:?}",
-            video_cinematic_idx, self.mem_list.entries[video_cinematic_idx].res_type
+            video_cinematic_idx, self.storage.mem_list.entries[video_cinematic_idx].res_type
         );
 
         if video2_idx != MEMLIST_PART_NONE {
             println!(
                 "\tvideo2_idx={} {:?}",
-                video2_idx, self.mem_list.entries[video2_idx].res_type
+                video2_idx, self.storage.mem_list.entries[video2_idx].res_type
             );
         }
 
@@ -366,14 +356,7 @@ impl Resource {
             self.data.loaded_list = [0; 64];
 
             loop {
-                let mut mem_entry = None;
-
-                for (i, me) in self.mem_list.entries.iter().enumerate() {
-                    if me.state == MemEntryState::Loaded && me.buf_offset == mem_buf_idx {
-                        mem_entry = Some((i, me));
-                        break; // TODO: check this
-                    }
-                }
+                let mem_entry = self.storage.get_loaded_entry_with_offset(mem_buf_idx);
 
                 if let Some((i, me)) = mem_entry {
                     self.data.loaded_list[ll_idx] = i as u8;
@@ -390,7 +373,7 @@ impl Resource {
         if ser.mode() == Mode::Load {
             let mut mem_buf_idx = 0;
 
-            for me in &mut self.mem_list.entries {
+            for me in &mut self.storage.mem_list.entries {
                 let buf = me.read_bank("me")?; // TODO: fix'me'
                 me.buf_offset = self.mem_buf.len();
                 self.mem_buf[mem_buf_idx..mem_buf_idx + buf.len()].copy_from_slice(&buf); // TODO: optimize by reading in read_bank into the slice instead of returning vec
@@ -407,7 +390,7 @@ impl Resource {
 impl std::fmt::Debug for Resource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Resource")
-            .field("data_dir", &self.mem_list)
+            // .field("storage", &self.storage)
             .field("requested_next_part", &self.requested_next_part)
             .field("mem_buf.size", &self.mem_buf.len())
             //  .field("mem_buf", &self.mem_buf[..32].iter().collect::<Vec<_>>())
@@ -422,13 +405,13 @@ mod tests {
     use crate::util::data_dir;
 
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_read_entries() -> Result<()> {
         let data_dir = data_dir()?;
-        let mem_list = MemList::new(data_dir.to_str().unwrap());
-        let mut res = Resource::new(mem_list);
+        let storage = Storage::new(data_dir.to_str().unwrap());
+        let mut res = Resource::new(storage);
 
-        res.read_entries()?;
+        res.init()?;
 
         // println!("Entries:\n{:?}\nLen: {}", res.mem_entries, res.mem_entries.len());
 
@@ -436,15 +419,15 @@ mod tests {
     }
 
     #[test]
-    // #[ignore]
+    #[ignore]
     fn test_read_all_banks() -> Result<()> {
         let data_dir: String = data_dir()?.to_str().unwrap().into();
-        let mem_list = MemList::new(&data_dir);
-        let mut res = Resource::new(mem_list);
+        let storage = Storage::new(&data_dir);
+        let mut res = Resource::new(storage);
 
-        res.read_entries()?;
+        res.init()?;
 
-        for me in res.mem_list.entries {
+        for me in res.storage.mem_list.entries {
             println!("Entry: {:?}", me);
 
             test_read_bank(&data_dir, &me)?;

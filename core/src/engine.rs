@@ -1,11 +1,10 @@
 use crate::file::File;
-use crate::memlist::*;
 use crate::parts::*;
 use crate::reference::*;
 use crate::resource::*;
 use crate::serializer::*;
 use crate::system::*;
-use crate::vm::*;
+use crate::{storage::Storage, vm::*};
 use anyhow::{ensure, Result};
 
 use trace::trace;
@@ -26,8 +25,8 @@ pub(crate) struct Engine {
 
 impl Engine {
     fn new(sys: SystemRef, data_dir: &str, save_dir: &str) -> Self {
-        let mem_list = MemList::new(data_dir);
-        let res = Ref::new(Box::new(Resource::new(mem_list)));
+        let storage = Storage::new(data_dir);
+        let res = Ref::new(Box::new(Resource::new(storage)));
         let vm = VirtualMachine::new(res.clone(), sys.clone());
 
         Self {
@@ -60,8 +59,8 @@ impl Engine {
     fn init(&mut self) -> Result<()> {
         //Init system
         self.sys.get_mut().init("Out Of This World");
+        self.res.get_mut().init()?;
         self.res.get_mut().reset_mem_block();
-        self.res.get_mut().read_entries()?;
         self.vm.init();
 
         //Init virtual machine, legacy way

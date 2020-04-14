@@ -115,7 +115,7 @@ impl SfxPlayer {
         let _ = MutexStack::new(self.sys.clone(), &self.mutex);
 
         // to avoid borrow checker complain
-        let me = &self.res.get().mem_list.entries[res_num as usize];
+        let me = &self.res.get().storage.mem_list.entries[res_num as usize];
         let me_offset = me.buf_offset as usize;
 
         if me.state == MemEntryState::Loaded && me.res_type == ResType::Music {
@@ -159,7 +159,7 @@ impl SfxPlayer {
 
             if res_num != 0 {
                 ins.volume = src_me.from_buf_be_u16(offset as usize);
-                let me = &res.mem_list.entries[res_num];
+                let me = &res.storage.mem_list.entries[res_num];
 
                 if me.state == MemEntryState::Loaded && me.res_type == ResType::Sound {
                     ins.buf_offset = me.buf_offset as u16;

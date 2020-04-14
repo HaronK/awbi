@@ -40,6 +40,33 @@ impl Storage {
 
         Ok(())
     }
+
+    pub fn get_max_rank_entry_to_load(&mut self) -> Option<&mut MemEntry> {
+        let mut mem_entry: Option<&mut MemEntry> = None;
+        let mut max_num = 0;
+
+        for me in &mut self.mem_list.entries {
+            if me.state == MemEntryState::LoadMe && max_num <= me.rank_num {
+                max_num = me.rank_num;
+                mem_entry = Some(me);
+            }
+        }
+
+        mem_entry
+    }
+
+    pub fn get_loaded_entry_with_offset(&self, offset: usize) -> Option<(usize, &MemEntry)> {
+        let mut mem_entry = None;
+
+        for (i, me) in self.mem_list.entries.iter().enumerate() {
+            if me.state == MemEntryState::Loaded && me.buf_offset == offset {
+                mem_entry = Some((i, me));
+                break; // TODO: check this
+            }
+        }
+
+        mem_entry
+    }
 }
 
 #[cfg(test)]

@@ -800,7 +800,7 @@ impl VirtualMachine {
     fn snd_play_sound(&mut self, res_num: usize, freq: u8, vol: u8, channel: u8) {
         // debug(DBG_SND, "snd_play_sound(0x%X, %d, %d, %d)", res_num, freq, vol, channel);
 
-        let me = &self.res.get_mut().mem_list.entries[res_num];
+        let me = &self.res.get_mut().storage.mem_list.entries[res_num];
 
         if me.state != MemEntryState::Loaded {
             return;
