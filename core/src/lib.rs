@@ -12,6 +12,7 @@ mod resource;
 mod serializer;
 mod sfxplayer;
 mod staticres;
+mod storage;
 mod system;
 mod video;
 mod vm;
