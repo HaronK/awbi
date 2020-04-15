@@ -93,18 +93,8 @@ impl MemEntry {
         self.buffer[offset../*offset + src.len()*/].clone_from_slice(src);
     }
 
-    pub fn read_bank(&self, data_dir: &str) -> Result<Vec<u8>> {
-        let mut bk = Bank::default();
-        let res = bk
-            .read(data_dir, self)
-            .with_context(|| "MemEntry::read_bank() unable to unpack entry".to_string())?;
-        ensure!(
-            res.len() == self.size as usize,
-            "[read_bank] Wrong buffer size. Expected {} but was {}",
-            self.size,
-            res.len()
-        );
-        Ok(res)
+    pub fn read_bank(&self) -> &[u8] {
+        &self.buffer
     }
 }
 
@@ -154,10 +144,6 @@ impl MemList {
         }
 
         Ok(())
-    }
-
-    pub fn read_bank(&self, me: &MemEntry) -> Result<Vec<u8>> {
-        me.read_bank(&self.data_dir)
     }
 
     pub fn invalidate_res(&mut self) {

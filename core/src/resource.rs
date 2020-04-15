@@ -206,7 +206,7 @@ impl Resource {
                     me.state = MemEntryState::NotNeeded;
                 } else {
                     // debug(DBG_BANK, "Resource::load() bufPos=%X size=%X type=%X pos=%X bankId=%X", loadDestination - _memPtrStart, me->packedSize, me->type, me->bankOffset, me->bankId);
-                    let data = me.read_bank("me")?; // TODO: fix 'me'
+                    let data = me.read_bank();
                     if me.res_type == ResType::PolyAnim {
                         // self.mem_entries[self.storage.seg_video2_idx]
                         //     .from_slice(&data, self.storage.vid_cur_off);
@@ -223,7 +223,7 @@ impl Resource {
                         //     .from_slice(&data, self.storage.script_cur_off);
                         let off = me.buf_offset as usize;
                         self.mem_buf[off..off + data.len()].copy_from_slice(&data);
-                        me.buffer = data;
+                        // me.buffer = data;
                         me.state = MemEntryState::Loaded;
                         self.data.script_cur_off += me.size as usize;
                     }
@@ -374,10 +374,10 @@ impl Resource {
             let mut mem_buf_idx = 0;
 
             for me in &mut self.storage.mem_list.entries {
-                let buf = me.read_bank("me")?; // TODO: fix'me'
-                me.buf_offset = self.mem_buf.len();
+                let buf = me.read_bank();
+                // me.buf_offset = self.mem_buf.len(); // TODO: uncomment
                 self.mem_buf[mem_buf_idx..mem_buf_idx + buf.len()].copy_from_slice(&buf); // TODO: optimize by reading in read_bank into the slice instead of returning vec
-                me.buffer = buf;
+                // me.buffer = buf;
                 mem_buf_idx += me.size as usize;
                 todo!();
             }
@@ -436,8 +436,8 @@ mod tests {
         Ok(())
     }
 
-    fn test_read_bank(data_dir: &str, me: &MemEntry) -> Result<()> {
-        let _data = me.read_bank(data_dir)?;
+    fn test_read_bank(_data_dir: &str, me: &MemEntry) -> Result<()> {
+        let _data = me.read_bank();
         // println!("Data size: {}", data.len());
         // println!("Data: {:?}", data);
 
