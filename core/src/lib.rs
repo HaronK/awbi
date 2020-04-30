@@ -2,6 +2,7 @@
 #![feature(const_generics)]
 
 mod bank;
+mod command;
 mod engine;
 mod file;
 mod memlist;

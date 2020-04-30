@@ -555,7 +555,10 @@ impl VirtualMachine {
                 self.data_page_offset = n as usize;
                 self.stack_ptr = 0;
 
-                println!("\tVirtualMachine::host_frame() thread_id={} ip={}", thread_id, n);
+                println!(
+                    "\tVirtualMachine::host_frame() thread_id={} ip={}",
+                    thread_id, n
+                );
                 self.execute_thread()?;
 
                 //Since .pc is going to be modified by this next loop iteration, we need to save it.

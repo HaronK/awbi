@@ -2,7 +2,7 @@ use crate::file::File;
 use crate::memlist::*;
 use crate::parts::*;
 use crate::reference::*;
-use crate::{storage::Storage, serializer::*};
+use crate::{serializer::*, storage::Storage};
 use anyhow::{ensure, Result};
 
 use trace::trace;
@@ -377,7 +377,7 @@ impl Resource {
                 let buf = me.read_bank();
                 // me.buf_offset = self.mem_buf.len(); // TODO: uncomment
                 self.mem_buf[mem_buf_idx..mem_buf_idx + buf.len()].copy_from_slice(&buf); // TODO: optimize by reading in read_bank into the slice instead of returning vec
-                // me.buffer = buf;
+                                                                                          // me.buffer = buf;
                 mem_buf_idx += me.size as usize;
                 todo!();
             }
@@ -428,7 +428,10 @@ mod tests {
         res.init()?;
 
         for me in res.storage.mem_list.entries {
-            println!("Entry: {:15?} {:3} {:7} {:6} {}", me.res_type, me.bank_id, me.bank_offset, me.packed_size, me.size);
+            println!(
+                "Entry: {:15?} {:3} {:7} {:6} {}",
+                me.res_type, me.bank_id, me.bank_offset, me.packed_size, me.size
+            );
 
             test_read_bank(&data_dir, &me)?;
         }
@@ -441,7 +444,7 @@ mod tests {
         println!("Data<{}>:", data.len());
 
         let bytes_to_print = 128;
-        let mut  i = 0;
+        let mut i = 0;
         while i < bytes_to_print && i < data.len() {
             for _ in 0..32 {
                 print!(" {:02X}", data[i]);
