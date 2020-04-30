@@ -555,8 +555,7 @@ impl VirtualMachine {
                 self.data_page_offset = n as usize;
                 self.stack_ptr = 0;
 
-                self.goto_next_thread = false;
-                // debug(DBG_VM, "VirtualMachine::host_frame() i=0x%02X n=0x%02X *p=0x%02X", thread_id, n, *self.page_offset());
+                println!("\tVirtualMachine::host_frame() thread_id={} ip={}", thread_id, n);
                 self.execute_thread()?;
 
                 //Since .pc is going to be modified by this next loop iteration, we need to save it.
@@ -574,6 +573,8 @@ impl VirtualMachine {
 
     #[trace]
     fn execute_thread(&mut self) -> Result<()> {
+        self.goto_next_thread = false;
+
         while !self.goto_next_thread {
             let opcode = self.fetch_data_u8();
             println!("\topcode=0x{:02x}", opcode);

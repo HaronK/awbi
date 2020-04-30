@@ -428,7 +428,7 @@ mod tests {
         res.init()?;
 
         for me in res.storage.mem_list.entries {
-            println!("Entry: {:?}", me);
+            println!("Entry: {:15?} {:3} {:7} {:6} {}", me.res_type, me.bank_id, me.bank_offset, me.packed_size, me.size);
 
             test_read_bank(&data_dir, &me)?;
         }
@@ -437,9 +437,24 @@ mod tests {
     }
 
     fn test_read_bank(_data_dir: &str, me: &MemEntry) -> Result<()> {
-        let _data = me.read_bank();
-        // println!("Data size: {}", data.len());
-        // println!("Data: {:?}", data);
+        let data = me.read_bank();
+        println!("Data<{}>:", data.len());
+
+        let bytes_to_print = 128;
+        let mut  i = 0;
+        while i < bytes_to_print && i < data.len() {
+            for _ in 0..32 {
+                print!(" {:02X}", data[i]);
+                i += 1;
+
+                if i >= data.len() {
+                    break;
+                }
+            }
+            println!();
+        }
+
+        println!();
 
         Ok(())
     }
