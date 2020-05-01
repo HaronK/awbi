@@ -2,21 +2,68 @@ use crate::staticres::*;
 use anyhow::{bail, Result};
 use std::fmt;
 
+pub(crate) struct OpVar(u8);
+
+impl fmt::Debug for OpVar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.pad(&format!("[{}]", var_name(self.0)))
+    }
+}
+
+pub(crate) enum OpType {
+    Var(u8),
+    Val1(u8),
+    Val2(u16),
+}
+
+impl fmt::Debug for OpType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::Var(addr) => f.pad(&format!("[{}]", var_name(addr))),
+            Self::Val1(val) => f.pad(&format!("0x{:02X}", val)),
+            Self::Val2(val) => f.pad(&format!("0x{:04X}", val)),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum JmpType {
+    Je,
+    Jne,
+    Jg,
+    Jge,
+    Jl,
+    Jle,
+}
+
+impl fmt::Debug for JmpType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::Je => f.pad("je"),
+            Self::Jne => f.pad("jne"),
+            Self::Jg => f.pad("jg"),
+            Self::Jge => f.pad("jge"),
+            Self::Jl => f.pad("jl"),
+            Self::Jle => f.pad("jle"),
+        }
+    }
+}
+
 pub(crate) enum Command {
     MovConst {
-        var_id: u8,
+        var_id: OpVar,
         val: u16,
     },
     Mov {
-        dst_id: u8,
-        src_id: u8,
+        dst_id: OpVar,
+        src_id: OpVar,
     },
     Add {
-        dst_id: u8,
-        src_id: u8,
+        dst_id: OpVar,
+        src_id: OpVar,
     },
     AddConst {
-        var_id: u8,
+        var_id: OpVar,
         val: u16,
     },
     Call {
@@ -32,14 +79,13 @@ pub(crate) enum Command {
         offset: u16,
     },
     Jnz {
-        flag: u8,
+        var_id: OpVar,
         offset: u16,
     },
     CondJmp {
-        opcode: u8,
-        i: u8,
-        c: u8,
-        a: u8,
+        jmp_type: JmpType,
+        var_id: OpVar,
+        op1: OpType,
         offset: u16,
     },
     SetPalette {
@@ -72,23 +118,23 @@ pub(crate) enum Command {
         color: u8,
     },
     Sub {
-        dst_id: u8,
-        src_id: u8,
+        dst_id: OpVar,
+        src_id: OpVar,
     },
     And {
-        var_id: u8,
+        var_id: OpVar,
         val: u16,
     },
     Or {
-        var_id: u8,
+        var_id: OpVar,
         val: u16,
     },
     Shl {
-        var_id: u8,
+        var_id: OpVar,
         val: u16,
     },
     Shr {
-        var_id: u8,
+        var_id: OpVar,
         val: u16,
     },
     PlaySound {
@@ -113,11 +159,9 @@ pub(crate) enum Command {
     Video2 {
         opcode: u8,
         offset: usize,
-        x: u8,
-        x_corr: u8,
-        y: u8,
-        y_corr: u8,
-        zoom: u8,
+        x: OpType,
+        y: OpType,
+        zoom: OpType,
         size: usize,
     },
 }
@@ -126,19 +170,19 @@ impl Command {
     pub fn parse(opcode: u8, data: &[u8]) -> Result<Self> {
         let res = match opcode {
             0x00 => Self::MovConst {
-                var_id: read_u8(data),
+                var_id: OpVar(read_u8(data)),
                 val: read_u16(&data[1..]),
             },
             0x01 => Self::Mov {
-                dst_id: read_u8(data),
-                src_id: read_u8(&data[1..]),
+                dst_id: OpVar(read_u8(data)),
+                src_id: OpVar(read_u8(&data[1..])),
             },
             0x02 => Self::Add {
-                dst_id: read_u8(data),
-                src_id: read_u8(&data[1..]),
+                dst_id: OpVar(read_u8(data)),
+                src_id: OpVar(read_u8(&data[1..])),
             },
             0x03 => Self::AddConst {
-                var_id: read_u8(data),
+                var_id: OpVar(read_u8(data)),
                 val: read_u16(&data[1..]),
             },
             0x04 => Self::Call {
@@ -154,27 +198,37 @@ impl Command {
                 offset: read_u16(&data[1..]),
             },
             0x09 => Self::Jnz {
-                flag: read_u8(data),
+                var_id: OpVar(read_u8(data)),
                 offset: read_u16(&data[1..]),
             },
             0x0A => {
                 let oc = read_u8(data);
-                let i = read_u8(&data[1..]);
+                let var_id = OpVar(read_u8(&data[1..]));
                 let c = read_u8(&data[2..]);
                 let mut shift = 0;
-                let a = if opcode & 0x80 != 0 {
-                    0
-                } else if opcode & 0x40 != 0 {
+                let op1 = if oc & 0x80 != 0 {
+                    OpType::Var(c)
+                } else if oc & 0x40 != 0 {
                     shift = 1;
-                    read_u8(&data[3..])
+                    OpType::Val2((c as u16) * 256 + read_u8(&data[3..]) as u16)
                 } else {
-                    c
+                    OpType::Val1(c)
                 };
+
+                const JMP_TYPE: &[JmpType] = &[
+                    JmpType::Je,
+                    JmpType::Jne,
+                    JmpType::Jg,
+                    JmpType::Jge,
+                    JmpType::Jl,
+                    JmpType::Jle,
+                ];
+                let jmp_type = JMP_TYPE[(oc & 7) as usize];
+
                 Self::CondJmp {
-                    opcode: oc,
-                    i,
-                    c,
-                    a,
+                    jmp_type,
+                    var_id,
+                    op1,
                     offset: read_u16(&data[3 + shift..]),
                 }
             }
@@ -208,23 +262,23 @@ impl Command {
                 color: read_u8(&data[4..]),
             },
             0x13 => Self::Sub {
-                dst_id: read_u8(data),
-                src_id: read_u8(&data[1..]),
+                dst_id: OpVar(read_u8(data)),
+                src_id: OpVar(read_u8(&data[1..])),
             },
             0x14 => Self::And {
-                var_id: read_u8(data),
+                var_id: OpVar(read_u8(data)),
                 val: read_u16(&data[1..]),
             },
             0x15 => Self::Or {
-                var_id: read_u8(data),
+                var_id: OpVar(read_u8(data)),
                 val: read_u16(&data[1..]),
             },
             0x16 => Self::Shl {
-                var_id: read_u8(data),
+                var_id: OpVar(read_u8(data)),
                 val: read_u16(&data[1..]),
             },
             0x17 => Self::Shr {
-                var_id: read_u8(data),
+                var_id: OpVar(read_u8(data)),
                 val: read_u16(&data[1..]),
             },
             0x18 => Self::PlaySound {
@@ -253,39 +307,56 @@ impl Command {
                     let mut shift = 0;
                     let offset = (read_u16(data) as usize) * 2;
 
-                    let x = read_u8(&data[2..]);
-                    let x_corr = if opcode & 0x20 == 0 && opcode & 0x10 == 0 {
-                        shift = 1;
-                        read_u8(&data[3..])
+                    let x_val = read_u8(&data[2..]);
+                    let x = if opcode & 0x20 == 0 {
+                        if opcode & 0x10 == 0 {
+                            shift = 1;
+                            OpType::Val2(((x_val as u16) << 8) | (read_u8(&data[3..]) as u16))
+                        } else {
+                            OpType::Var(x_val)
+                        }
+                    } else if opcode & 0x10 != 0 {
+                        OpType::Val2((x_val as u16) + 0x100)
                     } else {
-                        0
+                        OpType::Val1(x_val)
                     };
 
-                    let y = read_u8(&data[3 + shift..]);
-                    let y_corr = if opcode & 8 == 0 && opcode & 4 == 0 {
-                        shift += 1;
-                        read_u8(&data[3 + shift..])
+                    let y_val = read_u8(&data[3 + shift..]);
+                    let y = if opcode & 8 == 0 {
+                        if opcode & 4 == 0 {
+                            shift += 1;
+                            OpType::Val2(
+                                ((y_val as u16) << 8) | (read_u8(&data[3 + shift..]) as u16),
+                            )
+                        } else {
+                            OpType::Var(y_val)
+                        }
                     } else {
-                        0
+                        OpType::Val1(y_val)
                     };
 
                     let mut zoom_corr = 0;
-                    let zoom = read_u8(&data[4 + shift..]);
-                    if opcode & 2 == 0 {
+                    let zoom_val = read_u8(&data[4 + shift..]);
+                    let zoom = if opcode & 2 == 0 {
                         if opcode & 1 == 0 {
                             zoom_corr = 1;
+                            OpType::Val1(0x40)
+                        } else {
+                            OpType::Var(zoom_val)
                         }
                     } else if opcode & 1 != 0 {
                         zoom_corr = 1;
-                    }
+                        // TODO: res->_useSegVideo2 = true;
+                        OpType::Val1(0x40)
+                    } else {
+                        OpType::Val1(zoom_val)
+                    };
 
                     Self::Video2 {
                         opcode,
                         offset,
                         x,
-                        x_corr,
                         y,
-                        y_corr,
                         zoom,
                         size: 5 + shift - zoom_corr,
                     }
@@ -299,7 +370,7 @@ impl Command {
     }
 
     pub fn args_size(&self) -> usize {
-        match *self {
+        match self {
             Self::MovConst { var_id: _, val: _ } => 3,
             Self::Mov {
                 dst_id: _,
@@ -318,15 +389,17 @@ impl Command {
                 thr_id: _,
                 offset: _,
             } => 3,
-            Self::Jnz { flag: _, offset: _ } => 3,
+            Self::Jnz {
+                var_id: _,
+                offset: _,
+            } => 3,
             Self::CondJmp {
-                opcode,
-                i: _,
-                c: _,
-                a: _,
+                jmp_type: _,
+                var_id: _,
+                op1,
                 offset: _,
             } => {
-                if opcode & (0x80 + 0x40) == 0x40 {
+                if let OpType::Val2(_) = op1 {
                     6
                 } else {
                     5
@@ -384,12 +457,10 @@ impl Command {
                 opcode: _,
                 offset: _,
                 x: _,
-                x_corr: _,
                 y: _,
-                y_corr: _,
                 zoom: _,
                 size,
-            } => size,
+            } => *size,
         }
     }
 }
@@ -414,23 +485,11 @@ fn var_name(id: u8) -> String {
 
 impl fmt::Debug for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::MovConst { var_id, val } => {
-                f.pad(&format!("mov [{}], 0x{:04X}", var_name(var_id), val))
-            }
-            Self::Mov { dst_id, src_id } => f.pad(&format!(
-                "mov [{}], [{}]",
-                var_name(dst_id),
-                var_name(src_id)
-            )),
-            Self::Add { dst_id, src_id } => f.pad(&format!(
-                "add [{}], [{}]",
-                var_name(dst_id),
-                var_name(src_id)
-            )),
-            Self::AddConst { var_id, val } => {
-                f.pad(&format!("add [{}], 0x{:04X}", var_name(var_id), val))
-            }
+        match self {
+            Self::MovConst { var_id, val } => f.pad(&format!("mov {:?}, 0x{:04X}", var_id, val)),
+            Self::Mov { dst_id, src_id } => f.pad(&format!("mov {:?}, {:?}", dst_id, src_id)),
+            Self::Add { dst_id, src_id } => f.pad(&format!("add {:?}, {:?}", dst_id, src_id)),
+            Self::AddConst { var_id, val } => f.pad(&format!("add {:?}, 0x{:04X}", var_id, val)),
             Self::Call { offset } => f.pad(&format!("call 0x{:04X}", offset)),
             Self::Ret => f.pad("ret"),
             Self::PauseThread => f.pad("break"),
@@ -439,31 +498,26 @@ impl fmt::Debug for Command {
                 "setvec channel:0x{:02X}, address:0x{:04X}",
                 thr_id, offset
             )),
-            Self::Jnz { flag, offset } => {
-                f.pad(&format!("djnz [{}], 0x{:04X}", var_name(flag), offset))
-            }
+            Self::Jnz { var_id, offset } => f.pad(&format!("djnz {:?}, 0x{:04X}", var_id, offset)),
             Self::CondJmp {
-                opcode,
-                i,
-                c: _,
-                a,
+                jmp_type,
+                var_id,
+                op1,
                 offset,
             } => {
                 const JMP_TYPE: &[&str] = &["je", "jne", "jg", "jge", "jl", "jle"];
                 f.pad(&format!(
-                    "{} [{}], 0x{:02X}, 0x{:04X}",
-                    JMP_TYPE[(opcode & 7) as usize],
-                    var_name(i),
-                    a,
-                    offset
+                    "{:?} {:?}, {:?}, 0x{:04X}",
+                    jmp_type, var_id, op1, offset
                 ))
             }
             Self::SetPalette { pal_id } => f.pad(&format!("setPalette 0x{:04X}", pal_id)),
             Self::ResetThread { thr_id, i, a } => {
-                const RESET_TYPE: &[&str] = &["freezeChannels", "unfreezeChannels", "deleteChannels"];
+                const RESET_TYPE: &[&str] =
+                    &["freezeChannels", "unfreezeChannels", "deleteChannels"];
                 f.pad(&format!(
                     "{} first:0x{:02X}, last:0x{:02X}",
-                    RESET_TYPE[a as usize], thr_id, i
+                    RESET_TYPE[*a as usize], thr_id, i
                 ))
             }
             Self::SelectVideoPage { page_id } => {
@@ -495,23 +549,13 @@ impl fmt::Debug for Command {
                 x,
                 y,
                 color,
-                STRINGS_TABLE_ENG.get(&(str_id as u16)).unwrap_or(&"")
+                STRINGS_TABLE_ENG.get(&(*str_id as u16)).unwrap_or(&"")
             )),
-            Self::Sub { dst_id, src_id } => f.pad(&format!(
-                "sub [{}], [{}]",
-                var_name(dst_id),
-                var_name(src_id)
-            )),
-            Self::And { var_id, val } => {
-                f.pad(&format!("and [{}], 0x{:04X}", var_name(var_id), val))
-            }
-            Self::Or { var_id, val } => f.pad(&format!("or [{}], 0x{:04X}", var_name(var_id), val)),
-            Self::Shl { var_id, val } => {
-                f.pad(&format!("shl [{}], 0x{:04X}", var_name(var_id), val))
-            }
-            Self::Shr { var_id, val } => {
-                f.pad(&format!("shr [{}], 0x{:04X}", var_name(var_id), val))
-            }
+            Self::Sub { dst_id, src_id } => f.pad(&format!("sub {:?}, {:?}", dst_id, src_id)),
+            Self::And { var_id, val } => f.pad(&format!("and {:?}, 0x{:04X}", var_id, val)),
+            Self::Or { var_id, val } => f.pad(&format!("or {:?}, 0x{:04X}", var_id, val)),
+            Self::Shl { var_id, val } => f.pad(&format!("shl {:?}, 0x{:04X}", var_id, val)),
+            Self::Shr { var_id, val } => f.pad(&format!("shr {:?}, 0x{:04X}", var_id, val)),
             Self::PlaySound {
                 res_id,
                 freq,
@@ -537,13 +581,11 @@ impl fmt::Debug for Command {
                 opcode: _,
                 offset,
                 x,
-                x_corr: _,
                 y,
-                y_corr: _,
                 zoom,
                 size: _,
             } => f.pad(&format!(
-                "video: off=0x{:04X} x=[0x{:02x}] y=[0x{:02x}] zoom:[0x{:02X}]",
+                "video: off=0x{:X} x={:?} y={:?} zoom:{:?}",
                 offset, x, y, zoom
             )),
         }
