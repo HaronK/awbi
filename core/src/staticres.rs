@@ -66,6 +66,19 @@ lazy_static! {
         0x38, 0x44, 0x82, 0x82, 0x44, 0x28, 0xEE, 0x00, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA,
     ];
 
+    pub static ref VARIABLE_NAME_BY_INDEX: HashMap<u8, &'static str> = {
+        let mut m = HashMap::new();
+        m.insert(0xDA, "LAST_KEYCHAR");
+        m.insert(0xE5, "HERO_POS_UP_DOWN");
+        m.insert(0xFA, "HERO_ACTION");
+        m.insert(0xFB, "HERO_POS_JUMP_DOWN");
+        m.insert(0xFC, "HERO_POS_LEFT_RIGHT");
+        m.insert(0xFD, "HERO_POS_MASK");
+        m.insert(0xFE, "HERO_ACTION_POS_MASK");
+        m.insert(0xFF, "PAUSE_SLICES");
+        m
+    };
+
     pub static ref STRINGS_TABLE_ENG: HashMap<u16, &'static str> = {
         let mut m = HashMap::new();
         m.insert(0x001, "P E A N U T  3000");

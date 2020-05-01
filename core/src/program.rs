@@ -29,13 +29,7 @@ impl fmt::Debug for Program {
             //     }
             // };
 
-            f.pad(&format!(
-                "{:05X}:  [{:02X}:{}]  {:?}\n",
-                ip,
-                opcode,
-                cmd.args_size(),
-                cmd
-            ))?;
+            f.pad(&format!("{:05X}:\t  {:?}\n", ip, cmd))?;
 
             ip += 1 + cmd.args_size();
         }
@@ -47,11 +41,14 @@ impl fmt::Debug for Program {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{memlist::ResType, resource::Resource, storage::Storage, util::data_dir};
+    use crate::{memlist::ResType, resource::Resource, storage::Storage, util::*};
     use anyhow::Result;
+    use std::fs::File;
+    use std::io::prelude::*;
 
     #[test]
     fn test_all_progs() -> Result<()> {
+        let proj_dir = proj_dir()?;
         let data_dir: String = data_dir()?.to_str().unwrap().into();
         let storage = Storage::new(&data_dir);
         let mut res = Resource::new(storage);
@@ -74,7 +71,11 @@ mod tests {
             let data = me.read_bank();
             let prog = Program::new(data.into());
 
-            println!("{:?}", prog);
+            // println!("{:?}", prog);
+
+            let file_name = format!("resource-0x{:02x}.asm", i);
+            let mut file = File::create(proj_dir.join(file_name))?;
+            file.write_all(format!("{:?}", prog).as_bytes())?;
         }
 
         Ok(())

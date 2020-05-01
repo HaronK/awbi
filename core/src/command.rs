@@ -1,3 +1,4 @@
+use crate::staticres::*;
 use anyhow::{bail, Result};
 use std::fmt;
 
@@ -41,7 +42,7 @@ pub(crate) enum Command {
         a: u8,
         offset: u16,
     },
-    SetPallete {
+    SetPalette {
         pal_id: u16,
     },
     ResetThread {
@@ -177,7 +178,7 @@ impl Command {
                     offset: read_u16(&data[3 + shift..]),
                 }
             }
-            0x0B => Self::SetPallete {
+            0x0B => Self::SetPalette {
                 pal_id: read_u16(data),
             },
             0x0C => Self::ResetThread {
@@ -243,7 +244,8 @@ impl Command {
             _ => {
                 if opcode & 0x80 != 0 {
                     Self::Video1 {
-                        offset: (((opcode as usize) << 8) | (read_u8(data) as usize)) * 2,
+                        offset: ((((opcode as usize) << 8) | (read_u8(data) as usize)) * 2)
+                            & 0xFFFF,
                         x: read_u8(&data[1..]),
                         y: read_u8(&data[2..]),
                     }
@@ -330,7 +332,7 @@ impl Command {
                     5
                 }
             }
-            Self::SetPallete { pal_id: _ } => 2,
+            Self::SetPalette { pal_id: _ } => 2,
             Self::ResetThread {
                 thr_id: _,
                 i: _,
@@ -402,31 +404,43 @@ fn read_u16(data: &[u8]) -> u16 {
     u16::from_be_bytes([data[0], data[1]])
 }
 
+fn var_name(id: u8) -> String {
+    if let Some(name) = VARIABLE_NAME_BY_INDEX.get(&id) {
+        name.to_string()
+    } else {
+        format!("0x{:02X}", id)
+    }
+}
+
 impl fmt::Debug for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::MovConst { var_id, val } => {
-                f.pad(&format!("mov  [0x{:02X}], 0x{:04X}", var_id, val))
+                f.pad(&format!("mov [{}], 0x{:04X}", var_name(var_id), val))
             }
-            Self::Mov { dst_id, src_id } => {
-                f.pad(&format!("mov  [0x{:02X}], [0x{:02X}]", dst_id, src_id))
-            }
-            Self::Add { dst_id, src_id } => {
-                f.pad(&format!("add  [0x{:02X}], [0x{:02X}]", dst_id, src_id))
-            }
+            Self::Mov { dst_id, src_id } => f.pad(&format!(
+                "mov [{}], [{}]",
+                var_name(dst_id),
+                var_name(src_id)
+            )),
+            Self::Add { dst_id, src_id } => f.pad(&format!(
+                "add [{}], [{}]",
+                var_name(dst_id),
+                var_name(src_id)
+            )),
             Self::AddConst { var_id, val } => {
-                f.pad(&format!("add  [0x{:02X}], 0x{:04X}", var_id, val))
+                f.pad(&format!("add [{}], 0x{:04X}", var_name(var_id), val))
             }
             Self::Call { offset } => f.pad(&format!("call 0x{:04X}", offset)),
             Self::Ret => f.pad("ret"),
             Self::PauseThread => f.pad("break"),
-            Self::Jmp { offset } => f.pad(&format!("jmp  0x{:04X}", offset)),
+            Self::Jmp { offset } => f.pad(&format!("jmp 0x{:04X}", offset)),
             Self::SetVect { thr_id, offset } => f.pad(&format!(
-                "vec  channel:0x{:02X}, address:0x{:04X}",
+                "setvec channel:0x{:02X}, address:0x{:04X}",
                 thr_id, offset
             )),
             Self::Jnz { flag, offset } => {
-                f.pad(&format!("jnz  [0x{:02X}], 0x{:04X}", flag, offset))
+                f.pad(&format!("djnz [{}], 0x{:04X}", var_name(flag), offset))
             }
             Self::CondJmp {
                 opcode,
@@ -435,12 +449,16 @@ impl fmt::Debug for Command {
                 a,
                 offset,
             } => f.pad(&format!(
-                "cjmp {} {} [0x{:02X}], 0x{:02X}, 0x{:04X}",
-                opcode, c, i, a, offset
+                "cjmp [{}], 0x{:02X}, 0x{:04X} {} {}",
+                var_name(i),
+                a,
+                offset,
+                opcode,
+                c
             )),
-            Self::SetPallete { pal_id } => f.pad(&format!("setPallete 0x{:04X}", pal_id)),
+            Self::SetPalette { pal_id } => f.pad(&format!("setPalette 0x{:04X}", pal_id)),
             Self::ResetThread { thr_id, i, a } => f.pad(&format!(
-                "deleteChannels first:ox{:02X}, last:0x{:02X}, {}",
+                "deleteChannels first:0x{:02X}, last:0x{:02X}, {}",
                 thr_id, i, a
             )),
             Self::SelectVideoPage { page_id } => {
@@ -467,16 +485,28 @@ impl fmt::Debug for Command {
                 y,
                 color,
             } => f.pad(&format!(
-                "text id:0x{:04X}, x:{}, y:{}, color:0x{:02X}",
-                str_id, x, y, color
+                "text id:0x{:04X}, x:{}, y:{}, color:0x{:02X}\t;\"{}\"",
+                str_id,
+                x,
+                y,
+                color,
+                STRINGS_TABLE_ENG.get(&(str_id as u16)).unwrap_or(&"")
             )),
-            Self::Sub { dst_id, src_id } => {
-                f.pad(&format!("sub  [0x{:02X}] [0x{:02X}]", dst_id, src_id))
+            Self::Sub { dst_id, src_id } => f.pad(&format!(
+                "sub [{}], [{}]",
+                var_name(dst_id),
+                var_name(src_id)
+            )),
+            Self::And { var_id, val } => {
+                f.pad(&format!("and [{}], 0x{:04X}", var_name(var_id), val))
             }
-            Self::And { var_id, val } => f.pad(&format!("and  [0x{:02X}] 0x{:04X}", var_id, val)),
-            Self::Or { var_id, val } => f.pad(&format!("or   [0x{:02X}] 0x{:04X}", var_id, val)),
-            Self::Shl { var_id, val } => f.pad(&format!("shl  [0x{:02X}] 0x{:04X}", var_id, val)),
-            Self::Shr { var_id, val } => f.pad(&format!("shr  [0x{:02X}] 0x{:04X}", var_id, val)),
+            Self::Or { var_id, val } => f.pad(&format!("or [{}], 0x{:04X}", var_name(var_id), val)),
+            Self::Shl { var_id, val } => {
+                f.pad(&format!("shl [{}], 0x{:04X}", var_name(var_id), val))
+            }
+            Self::Shr { var_id, val } => {
+                f.pad(&format!("shr [{}], 0x{:04X}", var_name(var_id), val))
+            }
             Self::PlaySound {
                 res_id,
                 freq,
@@ -496,7 +526,7 @@ impl fmt::Debug for Command {
                 res_num, delay, pos
             )),
             Self::Video1 { offset, x, y } => {
-                f.pad(&format!("video1: off=0x{:04X} x={} y={}", offset, x, y))
+                f.pad(&format!("video: off=0x{:02X} x={} y={}", offset, x, y))
             }
             Self::Video2 {
                 opcode,
@@ -508,8 +538,8 @@ impl fmt::Debug for Command {
                 zoom,
                 size: _,
             } => f.pad(&format!(
-                "video2: {} off=0x{:04X} x=[0x{:02X}] {} y=[0x{:02X}] {} zoom:0x{:02X}",
-                opcode, offset, x, x_corr, y, y_corr, zoom
+                "video: off=0x{:04X} x=[0x{:02x}] y=[0x{:02x}] zoom:[0x{:02X}] {} {} {}",
+                offset, x, y, zoom, x_corr, y_corr, opcode
             )),
         }
     }
