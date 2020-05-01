@@ -433,13 +433,13 @@ mod tests {
                 me.res_type, me.bank_id, me.bank_offset, me.packed_size, me.size
             );
 
-            test_read_bank(&data_dir, &me)?;
+            test_read_bank(&me)?;
         }
 
         Ok(())
     }
 
-    fn test_read_bank(_data_dir: &str, me: &MemEntry) -> Result<()> {
+    fn test_read_bank(me: &MemEntry) -> Result<()> {
         let data = me.read_bank();
         println!("Data<{}>:", data.len());
 

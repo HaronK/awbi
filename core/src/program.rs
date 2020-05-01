@@ -1,0 +1,78 @@
+use crate::command::Command;
+use std::fmt;
+
+pub(crate) struct Program {
+    code: Vec<u8>,
+}
+
+impl Program {
+    pub fn new(code: Vec<u8>) -> Self {
+        Self { code }
+    }
+}
+
+impl fmt::Debug for Program {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut ip = 0;
+
+        while ip < self.code.len() - 1 {
+            let opcode = self.code[ip];
+            let cmd = match Command::parse(opcode, &self.code[ip + 1..]) {
+                Ok(cmd) => cmd,
+                Err(err) => {
+                    println!("ERROR: [{}:{}] {:?}", ip, self.code.len(), err);
+                    break;
+                }
+            };
+
+            f.pad(&format!(
+                "{:05X}:  [{:02X}:{}]  {:?}\n",
+                ip,
+                opcode,
+                cmd.args_size(),
+                cmd
+            ))?;
+
+            ip += 1 + cmd.args_size();
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{memlist::ResType, resource::Resource, storage::Storage, util::data_dir};
+    use anyhow::Result;
+
+    #[test]
+    fn test_all_progs() -> Result<()> {
+        let data_dir: String = data_dir()?.to_str().unwrap().into();
+        let storage = Storage::new(&data_dir);
+        let mut res = Resource::new(storage);
+
+        res.init()?;
+
+        for (i, me) in res
+            .storage
+            .mem_list
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| (**e).res_type == ResType::Bytecode)
+        {
+            println!(
+                "Program({:02x}): bank_id: {}, bank_offset: {}, packed_size: {}, size: {}",
+                i, me.bank_id, me.bank_offset, me.packed_size, me.size
+            );
+
+            let data = me.read_bank();
+            let prog = Program::new(data.into());
+
+            println!("{:?}", prog);
+        }
+
+        Ok(())
+    }
+}

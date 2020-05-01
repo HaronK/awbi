@@ -26,7 +26,7 @@ pub(crate) enum Command {
     Jmp {
         offset: u16,
     },
-    SetSetVect {
+    SetVect {
         thr_id: u8,
         offset: u16,
     },
@@ -104,6 +104,21 @@ pub(crate) enum Command {
         delay: u16,
         pos: u8,
     },
+    Video1 {
+        offset: usize,
+        x: u8,
+        y: u8,
+    },
+    Video2 {
+        opcode: u8,
+        offset: usize,
+        x: u8,
+        x_corr: u8,
+        y: u8,
+        y_corr: u8,
+        zoom: u8,
+        size: usize,
+    },
 }
 
 impl Command {
@@ -133,7 +148,7 @@ impl Command {
             0x07 => Self::Jmp {
                 offset: read_u16(data),
             },
-            0x08 => Self::SetSetVect {
+            0x08 => Self::SetVect {
                 thr_id: read_u8(data),
                 offset: read_u16(&data[1..]),
             },
@@ -225,10 +240,144 @@ impl Command {
                 delay: read_u16(&data[2..]),
                 pos: read_u8(&data[4..]),
             },
-            _ => bail!("Command::parse() invalid opcode=0x{:02x}", opcode),
+            _ => {
+                if opcode & 0x80 != 0 {
+                    Self::Video1 {
+                        offset: (((opcode as usize) << 8) | (read_u8(data) as usize)) * 2,
+                        x: read_u8(&data[1..]),
+                        y: read_u8(&data[2..]),
+                    }
+                } else if opcode & 0x40 != 0 {
+                    let mut shift = 0;
+                    let offset = (read_u16(data) as usize) * 2;
+                    let x = read_u8(&data[2..]);
+                    let x_corr = if opcode & 0x20 == 0 && opcode & 0x10 == 0 {
+                        shift = 1;
+                        read_u8(&data[3..])
+                    } else {
+                        0
+                    };
+                    let y = read_u8(&data[3 + shift..]);
+                    let y_corr = if opcode & 8 == 0 && opcode & 4 == 0 {
+                        shift += 1;
+                        read_u8(&data[3 + shift..])
+                    } else {
+                        0
+                    };
+                    let zoom = read_u8(&data[4 + shift..]);
+
+                    Self::Video2 {
+                        opcode,
+                        offset,
+                        x,
+                        x_corr,
+                        y,
+                        y_corr,
+                        zoom,
+                        size: 5 + shift,
+                    }
+                } else {
+                    bail!("Command::parse() invalid opcode=0x{:02X}", opcode);
+                }
+            }
         };
 
         Ok(res)
+    }
+
+    pub fn args_size(&self) -> usize {
+        match *self {
+            Self::MovConst { var_id: _, val: _ } => 3,
+            Self::Mov {
+                dst_id: _,
+                src_id: _,
+            } => 2,
+            Self::Add {
+                dst_id: _,
+                src_id: _,
+            } => 2,
+            Self::AddConst { var_id: _, val: _ } => 3,
+            Self::Call { offset: _ } => 2,
+            Self::Ret => 0,
+            Self::PauseThread => 0,
+            Self::Jmp { offset: _ } => 2,
+            Self::SetVect {
+                thr_id: _,
+                offset: _,
+            } => 3,
+            Self::Jnz { flag: _, offset: _ } => 3,
+            Self::CondJmp {
+                opcode,
+                i: _,
+                c: _,
+                a: _,
+                offset: _,
+            } => {
+                if opcode & (0x80 + 0x40) == 0x40 {
+                    6
+                } else {
+                    5
+                }
+            }
+            Self::SetPallete { pal_id: _ } => 2,
+            Self::ResetThread {
+                thr_id: _,
+                i: _,
+                a: _,
+            } => 3, // TODO: check this with C++
+            Self::SelectVideoPage { page_id: _ } => 1,
+            Self::FillVideoPage {
+                page_id: _,
+                color: _,
+            } => 2,
+            Self::CopyVideoPage {
+                src_page_id: _,
+                dst_page_id: _,
+            } => 2,
+            Self::BlitFramebuffer { page_id: _ } => 1,
+            Self::KillThread => 0,
+            Self::DrawString {
+                str_id: _,
+                x: _,
+                y: _,
+                color: _,
+            } => 5,
+            Self::Sub {
+                dst_id: _,
+                src_id: _,
+            } => 2,
+            Self::And { var_id: _, val: _ } => 3,
+            Self::Or { var_id: _, val: _ } => 3,
+            Self::Shl { var_id: _, val: _ } => 3,
+            Self::Shr { var_id: _, val: _ } => 3,
+            Self::PlaySound {
+                res_id: _,
+                freq: _,
+                vol: _,
+                channel: _,
+            } => 5,
+            Self::UpdateMemList { res_id: _ } => 2,
+            Self::PlayMusic {
+                res_num: _,
+                delay: _,
+                pos: _,
+            } => 5,
+            Self::Video1 {
+                offset: _,
+                x: _,
+                y: _,
+            } => 3,
+            Self::Video2 {
+                opcode: _,
+                offset: _,
+                x: _,
+                x_corr: _,
+                y: _,
+                y_corr: _,
+                zoom: _,
+                size,
+            } => size,
+        }
     }
 }
 
@@ -245,56 +394,112 @@ fn read_u16(data: &[u8]) -> u16 {
 impl fmt::Debug for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Self::MovConst { var_id, val } => f.pad(&format!("MOVC {} {}", var_id, val)),
-            Self::Mov { dst_id, src_id } => f.pad(&format!("MOV  {} {}", dst_id, src_id)),
-            Self::Add { dst_id, src_id } => f.pad(&format!("ADD  {} {}", dst_id, src_id)),
-            Self::AddConst { var_id, val } => f.pad(&format!("ADDC {} {}", var_id, val)),
-            Self::Call { offset } => f.pad(&format!("CALL {:X}", offset)),
-            Self::Ret => f.pad("RET"),
-            Self::PauseThread => f.pad("PTHR"),
-            Self::Jmp { offset } => f.pad(&format!("JMP  {:X}", offset)),
-            Self::SetSetVect { thr_id, offset } => f.pad(&format!("SSV  {} {:X}", thr_id, offset)),
-            Self::Jnz { flag, offset } => f.pad(&format!("JNZ  {} {:X}", flag, offset)),
+            Self::MovConst { var_id, val } => {
+                f.pad(&format!("mov  [0x{:02X}], 0x{:04X}", var_id, val))
+            }
+            Self::Mov { dst_id, src_id } => {
+                f.pad(&format!("mov  [0x{:02X}], [0x{:02X}]", dst_id, src_id))
+            }
+            Self::Add { dst_id, src_id } => {
+                f.pad(&format!("add  [0x{:02X}], [0x{:02X}]", dst_id, src_id))
+            }
+            Self::AddConst { var_id, val } => {
+                f.pad(&format!("add  [0x{:02X}], 0x{:04X}", var_id, val))
+            }
+            Self::Call { offset } => f.pad(&format!("call 0x{:04X}", offset)),
+            Self::Ret => f.pad("ret"),
+            Self::PauseThread => f.pad("break"),
+            Self::Jmp { offset } => f.pad(&format!("jmp  0x{:04X}", offset)),
+            Self::SetVect { thr_id, offset } => f.pad(&format!(
+                "vec  channel:0x{:02X}, address:0x{:04X}",
+                thr_id, offset
+            )),
+            Self::Jnz { flag, offset } => {
+                f.pad(&format!("jnz  [0x{:02X}], 0x{:04X}", flag, offset))
+            }
             Self::CondJmp {
                 opcode,
                 i,
                 c,
                 a,
                 offset,
-            } => f.pad(&format!("CJMP {} {} {} {} {:X}", opcode, i, c, a, offset)),
-            Self::SetPallete { pal_id } => f.pad(&format!("SPAL {}", pal_id)),
-            Self::ResetThread { thr_id, i, a } => f.pad(&format!("RTHR {} {} {}", thr_id, i, a)),
-            Self::SelectVideoPage { page_id } => f.pad(&format!("SVP  {}", page_id)),
-            Self::FillVideoPage { page_id, color } => f.pad(&format!("FVP {} {}", page_id, color)),
+            } => f.pad(&format!(
+                "cjmp {} {} [0x{:02X}], 0x{:02X}, 0x{:04X}",
+                opcode, c, i, a, offset
+            )),
+            Self::SetPallete { pal_id } => f.pad(&format!("setPallete 0x{:04X}", pal_id)),
+            Self::ResetThread { thr_id, i, a } => f.pad(&format!(
+                "deleteChannels first:ox{:02X}, last:0x{:02X}, {}",
+                thr_id, i, a
+            )),
+            Self::SelectVideoPage { page_id } => {
+                f.pad(&format!("selectVideoPage 0x{:02X}", page_id))
+            }
+            Self::FillVideoPage { page_id, color } => f.pad(&format!(
+                "fillVideoPage 0x{:02X}, color:0x{:02X}",
+                page_id, color
+            )),
             Self::CopyVideoPage {
                 src_page_id,
                 dst_page_id,
-            } => f.pad(&format!("CVP  {} {}", src_page_id, dst_page_id)),
-            Self::BlitFramebuffer { page_id } => f.pad(&format!("BFB  {}", page_id)),
-            Self::KillThread => f.pad("KTHR"),
+            } => f.pad(&format!(
+                "copyVideoPage src:0x{:02X}, dst:0x{:02X}",
+                src_page_id, dst_page_id
+            )),
+            Self::BlitFramebuffer { page_id } => {
+                f.pad(&format!("blitFramebuffer 0x{:02X}", page_id))
+            }
+            Self::KillThread => f.pad("killChannel"),
             Self::DrawString {
                 str_id,
                 x,
                 y,
                 color,
-            } => f.pad(&format!("STR  {} {} {} {}", str_id, x, y, color)),
-            Self::Sub { dst_id, src_id } => f.pad(&format!("SUB  {} {}", dst_id, src_id)),
-            Self::And { var_id, val } => f.pad(&format!("AND  {} {}", var_id, val)),
-            Self::Or { var_id, val } => f.pad(&format!("OR   {} {}", var_id, val)),
-            Self::Shl { var_id, val } => f.pad(&format!("SHL  {} {}", var_id, val)),
-            Self::Shr { var_id, val } => f.pad(&format!("SHR  {} {}", var_id, val)),
+            } => f.pad(&format!(
+                "text id:0x{:04X}, x:{}, y:{}, color:0x{:02X}",
+                str_id, x, y, color
+            )),
+            Self::Sub { dst_id, src_id } => {
+                f.pad(&format!("sub  [0x{:02X}] [0x{:02X}]", dst_id, src_id))
+            }
+            Self::And { var_id, val } => f.pad(&format!("and  [0x{:02X}] 0x{:04X}", var_id, val)),
+            Self::Or { var_id, val } => f.pad(&format!("or   [0x{:02X}] 0x{:04X}", var_id, val)),
+            Self::Shl { var_id, val } => f.pad(&format!("shl  [0x{:02X}] 0x{:04X}", var_id, val)),
+            Self::Shr { var_id, val } => f.pad(&format!("shr  [0x{:02X}] 0x{:04X}", var_id, val)),
             Self::PlaySound {
                 res_id,
                 freq,
                 vol,
                 channel,
-            } => f.pad(&format!("SND  {} {} {} {}", res_id, freq, vol, channel)),
-            Self::UpdateMemList { res_id } => f.pad(&format!("UML  {}", res_id)),
+            } => f.pad(&format!(
+                "play id:0x{:04X}, freq:0x{:02X}, vol:0x{:02X}, channel:0x{:02X}",
+                res_id, freq, vol, channel
+            )),
+            Self::UpdateMemList { res_id } => f.pad(&format!("load id:0x{:04X}", res_id)),
             Self::PlayMusic {
                 res_num,
                 delay,
                 pos,
-            } => f.pad(&format!("MUS  {} {} {}", res_num, delay, pos)),
+            } => f.pad(&format!(
+                "song id:0x{:04X}, delay:0x{:04X}, pos:0x{:02X}",
+                res_num, delay, pos
+            )),
+            Self::Video1 { offset, x, y } => {
+                f.pad(&format!("video1: off=0x{:04X} x={} y={}", offset, x, y))
+            }
+            Self::Video2 {
+                opcode,
+                offset,
+                x,
+                x_corr,
+                y,
+                y_corr,
+                zoom,
+                size: _,
+            } => f.pad(&format!(
+                "video2: {} off=0x{:04X} x=[0x{:02X}] {} y=[0x{:02X}] {} zoom:0x{:02X}",
+                opcode, offset, x, x_corr, y, y_corr, zoom
+            )),
         }
     }
 }

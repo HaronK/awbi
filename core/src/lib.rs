@@ -8,6 +8,7 @@ mod file;
 mod memlist;
 mod mixer;
 mod parts;
+mod program;
 mod reference;
 mod resource;
 mod serializer;
