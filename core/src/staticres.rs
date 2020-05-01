@@ -68,8 +68,11 @@ lazy_static! {
 
     pub static ref VARIABLE_NAME_BY_INDEX: HashMap<u8, &'static str> = {
         let mut m = HashMap::new();
+        m.insert(0x3C, "RANDOM_SEED");
         m.insert(0xDA, "LAST_KEYCHAR");
         m.insert(0xE5, "HERO_POS_UP_DOWN");
+        m.insert(0xF4, "MUS_MARK");
+        m.insert(0xF9, "SCROLL_Y");
         m.insert(0xFA, "HERO_ACTION");
         m.insert(0xFB, "HERO_POS_JUMP_DOWN");
         m.insert(0xFC, "HERO_POS_LEFT_RIGHT");

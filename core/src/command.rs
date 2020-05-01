@@ -445,22 +445,27 @@ impl fmt::Debug for Command {
             Self::CondJmp {
                 opcode,
                 i,
-                c,
+                c: _,
                 a,
                 offset,
-            } => f.pad(&format!(
-                "cjmp [{}], 0x{:02X}, 0x{:04X} {} {}",
-                var_name(i),
-                a,
-                offset,
-                opcode,
-                c
-            )),
+            } => {
+                const JMP_TYPE: &[&str] = &["je", "jne", "jg", "jge", "jl", "jle"];
+                f.pad(&format!(
+                    "{} [{}], 0x{:02X}, 0x{:04X}",
+                    JMP_TYPE[(opcode & 7) as usize],
+                    var_name(i),
+                    a,
+                    offset
+                ))
+            }
             Self::SetPalette { pal_id } => f.pad(&format!("setPalette 0x{:04X}", pal_id)),
-            Self::ResetThread { thr_id, i, a } => f.pad(&format!(
-                "deleteChannels first:0x{:02X}, last:0x{:02X}, {}",
-                thr_id, i, a
-            )),
+            Self::ResetThread { thr_id, i, a } => {
+                const RESET_TYPE: &[&str] = &["freezeChannels", "unfreezeChannels", "deleteChannels"];
+                f.pad(&format!(
+                    "{} first:0x{:02X}, last:0x{:02X}",
+                    RESET_TYPE[a as usize], thr_id, i
+                ))
+            }
             Self::SelectVideoPage { page_id } => {
                 f.pad(&format!("selectVideoPage 0x{:02X}", page_id))
             }
@@ -529,17 +534,17 @@ impl fmt::Debug for Command {
                 f.pad(&format!("video: off=0x{:02X} x={} y={}", offset, x, y))
             }
             Self::Video2 {
-                opcode,
+                opcode: _,
                 offset,
                 x,
-                x_corr,
+                x_corr: _,
                 y,
-                y_corr,
+                y_corr: _,
                 zoom,
                 size: _,
             } => f.pad(&format!(
-                "video: off=0x{:04X} x=[0x{:02x}] y=[0x{:02x}] zoom:[0x{:02X}] {} {} {}",
-                offset, x, y, zoom, x_corr, y_corr, opcode
+                "video: off=0x{:04X} x=[0x{:02x}] y=[0x{:02x}] zoom:[0x{:02X}]",
+                offset, x, y, zoom
             )),
         }
     }
