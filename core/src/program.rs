@@ -15,15 +15,19 @@ impl fmt::Debug for Program {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut ip = 0;
 
-        while ip < self.code.len() - 1 {
+        while ip < self.code.len() {
             let opcode = self.code[ip];
-            let cmd = match Command::parse(opcode, &self.code[ip + 1..]) {
-                Ok(cmd) => cmd,
-                Err(err) => {
-                    println!("ERROR: [{}:{}] {:?}", ip, self.code.len(), err);
-                    break;
-                }
-            };
+            let cmd = Command::parse(opcode, &self.code[ip + 1..]).map_err(|e| {
+                println!("ERROR: [{}:{}] {:?}", ip, self.code.len(), e);
+                fmt::Error
+            })?;
+            // let cmd = match Command::parse(opcode, &self.code[ip + 1..]) {
+            //     Ok(cmd) => cmd,
+            //     Err(err) => {
+            //         println!("ERROR: [{:05X}:{:05X}] {:?}", ip, self.code.len(), err);
+            //         break;
+            //     }
+            // };
 
             f.pad(&format!(
                 "{:05X}:  [{:02X}:{}]  {:?}\n",

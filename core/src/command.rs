@@ -250,6 +250,7 @@ impl Command {
                 } else if opcode & 0x40 != 0 {
                     let mut shift = 0;
                     let offset = (read_u16(data) as usize) * 2;
+
                     let x = read_u8(&data[2..]);
                     let x_corr = if opcode & 0x20 == 0 && opcode & 0x10 == 0 {
                         shift = 1;
@@ -257,6 +258,7 @@ impl Command {
                     } else {
                         0
                     };
+
                     let y = read_u8(&data[3 + shift..]);
                     let y_corr = if opcode & 8 == 0 && opcode & 4 == 0 {
                         shift += 1;
@@ -264,7 +266,16 @@ impl Command {
                     } else {
                         0
                     };
+
+                    let mut zoom_corr = 0;
                     let zoom = read_u8(&data[4 + shift..]);
+                    if opcode & 2 == 0 {
+                        if opcode & 1 == 0 {
+                            zoom_corr = 1;
+                        }
+                    } else if opcode & 1 != 0 {
+                        zoom_corr = 1;
+                    }
 
                     Self::Video2 {
                         opcode,
@@ -274,7 +285,7 @@ impl Command {
                         y,
                         y_corr,
                         zoom,
-                        size: 5 + shift,
+                        size: 5 + shift - zoom_corr,
                     }
                 } else {
                     bail!("Command::parse() invalid opcode=0x{:02X}", opcode);
