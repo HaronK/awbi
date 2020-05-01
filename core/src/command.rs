@@ -49,6 +49,24 @@ impl fmt::Debug for JmpType {
     }
 }
 
+#[inline]
+fn read_u8(data: &[u8]) -> u8 {
+    data[0]
+}
+
+#[inline]
+fn read_u16(data: &[u8]) -> u16 {
+    u16::from_be_bytes([data[0], data[1]])
+}
+
+fn var_name(id: u8) -> String {
+    if let Some(name) = VARIABLE_NAME_BY_INDEX.get(&id) {
+        name.to_string()
+    } else {
+        format!("0x{:02X}", id)
+    }
+}
+
 pub(crate) enum Command {
     MovConst {
         var_id: OpVar,
@@ -462,24 +480,6 @@ impl Command {
                 size,
             } => *size,
         }
-    }
-}
-
-#[inline]
-fn read_u8(data: &[u8]) -> u8 {
-    data[0]
-}
-
-#[inline]
-fn read_u16(data: &[u8]) -> u16 {
-    u16::from_be_bytes([data[0], data[1]])
-}
-
-fn var_name(id: u8) -> String {
-    if let Some(name) = VARIABLE_NAME_BY_INDEX.get(&id) {
-        name.to_string()
-    } else {
-        format!("0x{:02X}", id)
     }
 }
 
