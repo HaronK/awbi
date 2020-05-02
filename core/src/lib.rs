@@ -19,3 +19,4 @@ mod system;
 mod util;
 mod video;
 mod vm;
+mod vm_context;

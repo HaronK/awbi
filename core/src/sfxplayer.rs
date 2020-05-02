@@ -75,7 +75,7 @@ pub(crate) struct SfxPlayer {
     mutex: Vec<u8>,
     timer_id: Vec<u8>,
     delay: u16,
-    res_num: u16,
+    res_id: u16,
     sfx_mod: SfxModule,
     pub mark_var: Vec<i16>,
 }
@@ -89,7 +89,7 @@ impl SfxPlayer {
             mutex: Vec::new(),
             timer_id: Vec::new(),
             delay: 0,
-            res_num: 0,
+            res_id: 0,
             sfx_mod: Default::default(),
             mark_var: Vec::new(),
         }
@@ -110,16 +110,16 @@ impl SfxPlayer {
         self.delay = delay * 60 / 7050;
     }
 
-    pub fn load_sfx_module(&mut self, res_num: u16, delay: u16, pos: u8) -> Result<()> {
+    pub fn load_sfx_module(&mut self, res_id: u16, delay: u16, pos: u8) -> Result<()> {
         // debug(DBG_SND, "SfxPlayer::loadSfxModule(0x%X, %d, %d)", resNum, delay, pos);
         let _ = MutexStack::new(self.sys.clone(), &self.mutex);
 
         // to avoid borrow checker complain
-        let me = &self.res.get().storage.mem_list.entries[res_num as usize];
+        let me = &self.res.get().storage.mem_list.entries[res_id as usize];
         let me_offset = me.buf_offset as usize;
 
         if me.state == MemEntryState::Loaded && me.res_type == ResType::Music {
-            self.res_num = res_num;
+            self.res_id = res_id;
             self.sfx_mod = Default::default();
             self.sfx_mod.cur_order = pos;
             self.sfx_mod.num_order = me.from_buf_be_u16(me_offset + 0x3E) as u8;
@@ -154,19 +154,19 @@ impl SfxPlayer {
         mut offset: usize,
     ) -> Result<()> {
         for ins in &mut self.sfx_mod.samples {
-            let res_num = src_me.from_buf_be_u16(offset as usize) as usize;
+            let res_id = src_me.from_buf_be_u16(offset as usize) as usize;
             offset += 2;
 
-            if res_num != 0 {
+            if res_id != 0 {
                 ins.volume = src_me.from_buf_be_u16(offset as usize);
-                let me = &res.storage.mem_list.entries[res_num];
+                let me = &res.storage.mem_list.entries[res_id];
 
                 if me.state == MemEntryState::Loaded && me.res_type == ResType::Sound {
                     ins.buf_offset = me.buf_offset as u16;
                     res.memset(ins.buf_offset as usize + 8, 0, 4);
                 //         debug(DBG_SND, "Loaded instrument 0x%X n=%d volume=%d", resNum, i, ins->volume);
                 } else {
-                    bail!("Error loading instrument {}", res_num);
+                    bail!("Error loading instrument {}", res_id);
                 }
             }
 
@@ -186,8 +186,8 @@ impl SfxPlayer {
     pub fn stop(&mut self) {
         // debug(DBG_SND, "SfxPlayer::stop()");
         let _ = MutexStack::new(self.sys.clone(), &self.mutex);
-        if self.res_num != 0 {
-            self.res_num = 0;
+        if self.res_id != 0 {
+            self.res_id = 0;
             self.sys.get_mut().remove_timer(&self.timer_id);
         }
     }
@@ -207,9 +207,9 @@ impl SfxPlayer {
 
         self.sys.get_mut().unlock_mutex(&self.mutex);
 
-        if ser.mode() == Mode::Load && self.res_num != 0 {
+        if ser.mode() == Mode::Load && self.res_id != 0 {
             let delay = self.delay;
-            self.load_sfx_module(self.res_num, 0, self.sfx_mod.cur_order)?;
+            self.load_sfx_module(self.res_id, 0, self.sfx_mod.cur_order)?;
             self.delay = delay;
             // self.timer_id = self.sys.get_mut().add_timer(self.delay as u32, &|_interval| { self.handle_events(); self.delay as u32 }); // TODO: uncomment
         }
@@ -223,17 +223,17 @@ impl SfxPlayer {
 impl AccessorWrap for SfxPlayer {
     fn read(&mut self, stream: &mut File) -> Result<()> {
         self.delay.read(stream)?;
-        self.res_num.read(stream)?;
+        self.res_id.read(stream)?;
         self.sfx_mod.read(stream)
     }
 
     fn write(&self, stream: &mut File) -> Result<()> {
         self.delay.write(stream)?;
-        self.res_num.write(stream)?;
+        self.res_id.write(stream)?;
         self.sfx_mod.write(stream)
     }
 
     fn size(&self) -> usize {
-        self.delay.size() + self.res_num.size() + self.sfx_mod.size()
+        self.delay.size() + self.res_id.size() + self.sfx_mod.size()
     }
 }

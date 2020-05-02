@@ -15,22 +15,22 @@ use trace::trace;
 
 trace::init_depth_var!();
 
-const VM_NUM_THREADS: usize = 64;
-const VM_NUM_VARIABLES: usize = 256;
+pub const VM_NUM_THREADS: usize = 64;
+pub const VM_NUM_VARIABLES: usize = 256;
 const VM_NO_SETVEC_REQUESTED: u16 = 0xFFFF;
 const VM_INACTIVE_THREAD: u16 = 0xFFFF;
 
-const VM_VARIABLE_RANDOM_SEED: usize = 0x3C;
-const VM_VARIABLE_LAST_KEYCHAR: usize = 0xDA;
-const VM_VARIABLE_HERO_POS_UP_DOWN: usize = 0xE5;
-const VM_VARIABLE_MUS_MARK: usize = 0xF4;
-const VM_VARIABLE_SCROLL_Y: usize = 0xF9; // = 239
-const VM_VARIABLE_HERO_ACTION: usize = 0xFA;
-const VM_VARIABLE_HERO_POS_JUMP_DOWN: usize = 0xFB;
-const VM_VARIABLE_HERO_POS_LEFT_RIGHT: usize = 0xFC;
-const VM_VARIABLE_HERO_POS_MASK: usize = 0xFD;
-const VM_VARIABLE_HERO_ACTION_POS_MASK: usize = 0xFE;
-const VM_VARIABLE_PAUSE_SLICES: usize = 0xFF;
+pub const VM_VARIABLE_RANDOM_SEED: usize = 0x3C;
+pub const VM_VARIABLE_LAST_KEYCHAR: usize = 0xDA;
+pub const VM_VARIABLE_HERO_POS_UP_DOWN: usize = 0xE5;
+pub const VM_VARIABLE_MUS_MARK: usize = 0xF4;
+pub const VM_VARIABLE_SCROLL_Y: usize = 0xF9; // = 239
+pub const VM_VARIABLE_HERO_ACTION: usize = 0xFA;
+pub const VM_VARIABLE_HERO_POS_JUMP_DOWN: usize = 0xFB;
+pub const VM_VARIABLE_HERO_POS_LEFT_RIGHT: usize = 0xFC;
+pub const VM_VARIABLE_HERO_POS_MASK: usize = 0xFD;
+pub const VM_VARIABLE_HERO_ACTION_POS_MASK: usize = 0xFE;
+pub const VM_VARIABLE_PAUSE_SLICES: usize = 0xFF;
 
 //For self.threads_data navigation
 const PC_OFFSET: usize = 0;
@@ -42,8 +42,8 @@ const CUR_STATE: usize = 0;
 const REQUESTED_STATE: usize = 1;
 const NUM_THREAD_FIELDS: usize = 2;
 
-const COLOR_BLACK: u8 = 0xFF;
-const DEFAULT_ZOOM: u16 = 0x0040;
+pub const COLOR_BLACK: u8 = 0xFF;
+pub const DEFAULT_ZOOM: u16 = 0x0040;
 
 pub(crate) struct VirtualMachine {
     // The type of entries in opcodeTable. This allows "fast" branching
@@ -365,13 +365,15 @@ impl VirtualMachine {
         // debug(DBG_VM, "VirtualMachine::op_blit_framebuffer(%d)", page_id);
         self.inp_handle_special_keys();
 
+        let sys = self.sys.get();
+
         //Nasty hack....was this present in the original assembly  ??!!
         if self.res.get().current_part_id() == GAME_PART_FIRST && self.vm_variables[0x67] == 1 {
             self.vm_variables[0xDC] = 0x21;
         }
 
         if !self.fast_mode {
-            let delay = self.sys.get().get_timestamp() - self.last_time_stamp;
+            let delay = sys.get_timestamp() - self.last_time_stamp;
             let time_to_sleep = self.vm_variables[VM_VARIABLE_PAUSE_SLICES] * 20 - delay as i16;
 
             // The bytecode will set self.vm_variables[VM_VARIABLE_PAUSE_SLICES] from 1 to 5
@@ -381,10 +383,10 @@ impl VirtualMachine {
 
             if time_to_sleep > 0 {
                 //	printf("Sleeping for=%d\n",time_to_sleep);
-                self.sys.get().sleep(time_to_sleep as u32);
+                sys.sleep(time_to_sleep as u32);
             }
 
-            self.last_time_stamp = self.sys.get().get_timestamp();
+            self.last_time_stamp = sys.get_timestamp();
         }
 
         //WTF ?
@@ -597,8 +599,7 @@ impl VirtualMachine {
 
                 // This switch the polygon database to "cinematic" and probably draws a black polygon
                 // over all the screen.
-                self.video
-                    .set_data_page(self.res.get().seg_cinematic_idx(), off);
+                self.video.set_data_page(true, off);
                 self.video
                     .read_and_draw_polygon(COLOR_BLACK, DEFAULT_ZOOM, Point::new(x, y));
 
@@ -655,14 +656,7 @@ impl VirtualMachine {
                 }
                 println!("\tvid_opcd_0x40: off=0x{:x} x={} y={}", off, x, y);
 
-                self.video.set_data_page(
-                    if self.res.get().use_seg_video2() {
-                        self.res.get().seg_video2_idx()
-                    } else {
-                        self.res.get().seg_cinematic_idx()
-                    },
-                    off,
-                );
+                self.video.set_data_page(false, off);
                 self.video
                     .read_and_draw_polygon(0xFF, zoom, Point::new(x, y));
 
@@ -771,27 +765,26 @@ impl VirtualMachine {
     }
 
     fn inp_handle_special_keys(&mut self) {
-        if self.sys.get().input().pause {
-            if self.res.get().current_part_id() != GAME_PART1
-                && self.res.get().current_part_id() != GAME_PART2
-            {
-                self.sys.get_mut().input_mut().pause = false;
+        let mut sys = self.sys.get_mut();
+        let mut res = self.res.get_mut();
 
-                while !self.sys.get().input().pause {
-                    self.sys.get_mut().process_events();
-                    self.sys.get().sleep(200);
+        if sys.input().pause {
+            if res.current_part_id() != GAME_PART1 && res.current_part_id() != GAME_PART2 {
+                sys.input_mut().pause = false;
+
+                while !sys.input().pause {
+                    sys.process_events();
+                    sys.sleep(200);
                 }
             }
-            self.sys.get_mut().input_mut().pause = false;
+            sys.input_mut().pause = false;
         }
 
-        if self.sys.get().input().code {
-            self.sys.get_mut().input_mut().code = false;
+        if sys.input().code {
+            sys.input_mut().code = false;
 
-            if self.res.get().current_part_id() != GAME_PART_LAST
-                && self.res.get().current_part_id() != GAME_PART_FIRST
-            {
-                self.res.get_mut().requested_next_part = GAME_PART_LAST;
+            if res.current_part_id() != GAME_PART_LAST && res.current_part_id() != GAME_PART_FIRST {
+                res.requested_next_part = GAME_PART_LAST;
             }
         }
 

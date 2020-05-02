@@ -1,8 +1,8 @@
 use crate::staticres::*;
-use anyhow::{bail, Result};
+use anyhow::{bail, ensure, Result};
 use std::fmt;
 
-pub(crate) struct OpVar(u8);
+pub(crate) struct OpVar(pub u8);
 
 impl fmt::Debug for OpVar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -26,7 +26,6 @@ impl fmt::Debug for OpType {
     }
 }
 
-#[derive(Clone, Copy)]
 pub(crate) enum JmpType {
     Je,
     Jne,
@@ -34,6 +33,21 @@ pub(crate) enum JmpType {
     Jge,
     Jl,
     Jle,
+}
+
+impl JmpType {
+    fn new(oc: u8) -> Result<Self> {
+        let res = match oc {
+            0 => Self::Je,
+            1 => Self::Jne,
+            2 => Self::Jg,
+            3 => Self::Jge,
+            4 => Self::Jl,
+            5 => Self::Jle,
+            _ => bail!("Command::parse() invalid jmp opcode {}", oc),
+        };
+        Ok(res)
+    }
 }
 
 impl fmt::Debug for JmpType {
@@ -45,6 +59,35 @@ impl fmt::Debug for JmpType {
             Self::Jge => f.pad("jge"),
             Self::Jl => f.pad("jl"),
             Self::Jle => f.pad("jle"),
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub(crate) enum ResetType {
+    Freeze,
+    Unfreeze,
+    Delete,
+}
+
+impl ResetType {
+    fn new(oc: u8) -> Result<Self> {
+        let res = match oc {
+            0 => Self::Freeze,
+            1 => Self::Unfreeze,
+            2 => Self::Delete,
+            _ => bail!("Command::parse() invalid resetThread opcode {}", oc),
+        };
+        Ok(res)
+    }
+}
+
+impl fmt::Debug for ResetType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::Freeze => f.pad("freezeChannels"),
+            Self::Unfreeze => f.pad("unfreezeChannels"),
+            Self::Delete => f.pad("deleteChannels"),
         }
     }
 }
@@ -103,16 +146,16 @@ pub(crate) enum Command {
     CondJmp {
         jmp_type: JmpType,
         var_id: OpVar,
-        op1: OpType,
+        op2: OpType,
         offset: u16,
     },
     SetPalette {
         pal_id: u16,
     },
     ResetThread {
-        thr_id: u8,
-        i: u8,
-        a: u8,
+        reset_type: ResetType,
+        first: u8,
+        last: u8,
     },
     SelectVideoPage {
         page_id: u8,
@@ -165,7 +208,7 @@ pub(crate) enum Command {
         res_id: u16,
     },
     PlayMusic {
-        res_num: u16,
+        res_id: u16,
         delay: u16,
         pos: u8,
     },
@@ -175,7 +218,7 @@ pub(crate) enum Command {
         y: u8,
     },
     Video2 {
-        opcode: u8,
+        cinematic: bool,
         offset: usize,
         x: OpType,
         y: OpType,
@@ -224,7 +267,7 @@ impl Command {
                 let var_id = OpVar(read_u8(&data[1..]));
                 let c = read_u8(&data[2..]);
                 let mut shift = 0;
-                let op1 = if oc & 0x80 != 0 {
+                let op2 = if oc & 0x80 != 0 {
                     OpType::Var(c)
                 } else if oc & 0x40 != 0 {
                     shift = 1;
@@ -233,31 +276,36 @@ impl Command {
                     OpType::Val1(c)
                 };
 
-                const JMP_TYPE: &[JmpType] = &[
-                    JmpType::Je,
-                    JmpType::Jne,
-                    JmpType::Jg,
-                    JmpType::Jge,
-                    JmpType::Jl,
-                    JmpType::Jle,
-                ];
-                let jmp_type = JMP_TYPE[(oc & 7) as usize];
+                let jmp_type = JmpType::new(oc & 7)?;
 
                 Self::CondJmp {
                     jmp_type,
                     var_id,
-                    op1,
+                    op2,
                     offset: read_u16(&data[3 + shift..]),
                 }
             }
             0x0B => Self::SetPalette {
                 pal_id: read_u16(data),
             },
-            0x0C => Self::ResetThread {
-                thr_id: read_u8(data),
-                i: read_u8(&data[1..]),
-                a: read_u8(&data[2..]), // TODO: probably not always should be read. Compare with C++.
-            },
+            0x0C => {
+                let first = read_u8(data);
+                let last = read_u8(&data[1..]);
+                let reset_type = ResetType::new(read_u8(&data[2..]))?; // TODO: probably not always should be read. Compare with C++.
+
+                ensure!(
+                    first <= last,
+                    "Command::parse(): first({}) > last({})",
+                    first,
+                    last
+                );
+
+                Self::ResetThread {
+                    first,
+                    last,
+                    reset_type, // TODO: probably not always should be read. Compare with C++.
+                }
+            }
             0x0D => Self::SelectVideoPage {
                 page_id: read_u8(data),
             },
@@ -309,18 +357,23 @@ impl Command {
                 res_id: read_u16(data),
             },
             0x1A => Self::PlayMusic {
-                res_num: read_u16(data),
+                res_id: read_u16(data),
                 delay: read_u16(&data[2..]),
                 pos: read_u8(&data[4..]),
             },
             _ => {
                 if opcode & 0x80 != 0 {
-                    Self::Video1 {
-                        offset: ((((opcode as usize) << 8) | (read_u8(data) as usize)) * 2)
-                            & 0xFFFF,
-                        x: read_u8(&data[1..]),
-                        y: read_u8(&data[2..]),
+                    let offset =
+                        ((((opcode as usize) << 8) | (read_u8(data) as usize)) * 2) & 0xFFFF;
+                    let mut x = read_u8(&data[1..]);
+                    let mut y = read_u8(&data[2..]);
+
+                    if y > 199 {
+                        y = 199;
+                        x += y - 199;
                     }
+
+                    Self::Video1 { offset, x, y }
                 } else if opcode & 0x40 != 0 {
                     let mut shift = 0;
                     let offset = (read_u16(data) as usize) * 2;
@@ -353,6 +406,7 @@ impl Command {
                         OpType::Val1(y_val)
                     };
 
+                    let mut cinematic = true;
                     let mut zoom_corr = 0;
                     let zoom_val = read_u8(&data[4 + shift..]);
                     let zoom = if opcode & 2 == 0 {
@@ -364,14 +418,14 @@ impl Command {
                         }
                     } else if opcode & 1 != 0 {
                         zoom_corr = 1;
-                        // TODO: res->_useSegVideo2 = true;
+                        cinematic = false;
                         OpType::Val1(0x40)
                     } else {
                         OpType::Val1(zoom_val)
                     };
 
                     Self::Video2 {
-                        opcode,
+                        cinematic,
                         offset,
                         x,
                         y,
@@ -414,10 +468,10 @@ impl Command {
             Self::CondJmp {
                 jmp_type: _,
                 var_id: _,
-                op1,
+                op2,
                 offset: _,
             } => {
-                if let OpType::Val2(_) = op1 {
+                if let OpType::Val2(_) = op2 {
                     6
                 } else {
                     5
@@ -425,9 +479,9 @@ impl Command {
             }
             Self::SetPalette { pal_id: _ } => 2,
             Self::ResetThread {
-                thr_id: _,
-                i: _,
-                a: _,
+                reset_type: _,
+                first: _,
+                last: _,
             } => 3, // TODO: check this with C++
             Self::SelectVideoPage { page_id: _ } => 1,
             Self::FillVideoPage {
@@ -462,7 +516,7 @@ impl Command {
             } => 5,
             Self::UpdateMemList { res_id: _ } => 2,
             Self::PlayMusic {
-                res_num: _,
+                res_id: _,
                 delay: _,
                 pos: _,
             } => 5,
@@ -472,7 +526,7 @@ impl Command {
                 y: _,
             } => 3,
             Self::Video2 {
-                opcode: _,
+                cinematic: _,
                 offset: _,
                 x: _,
                 y: _,
@@ -502,24 +556,21 @@ impl fmt::Debug for Command {
             Self::CondJmp {
                 jmp_type,
                 var_id,
-                op1,
+                op2,
                 offset,
-            } => {
-                const JMP_TYPE: &[&str] = &["je", "jne", "jg", "jge", "jl", "jle"];
-                f.pad(&format!(
-                    "{:?} {:?}, {:?}, 0x{:04X}",
-                    jmp_type, var_id, op1, offset
-                ))
-            }
+            } => f.pad(&format!(
+                "{:?} {:?}, {:?}, 0x{:04X}",
+                jmp_type, var_id, op2, offset
+            )),
             Self::SetPalette { pal_id } => f.pad(&format!("setPalette 0x{:04X}", pal_id)),
-            Self::ResetThread { thr_id, i, a } => {
-                const RESET_TYPE: &[&str] =
-                    &["freezeChannels", "unfreezeChannels", "deleteChannels"];
-                f.pad(&format!(
-                    "{} first:0x{:02X}, last:0x{:02X}",
-                    RESET_TYPE[*a as usize], thr_id, i
-                ))
-            }
+            Self::ResetThread {
+                reset_type,
+                first,
+                last,
+            } => f.pad(&format!(
+                "{:?} first:0x{:02X}, last:0x{:02X}",
+                reset_type, first, last
+            )),
             Self::SelectVideoPage { page_id } => {
                 f.pad(&format!("selectVideoPage 0x{:02X}", page_id))
             }
@@ -566,19 +617,15 @@ impl fmt::Debug for Command {
                 res_id, freq, vol, channel
             )),
             Self::UpdateMemList { res_id } => f.pad(&format!("load id:0x{:04X}", res_id)),
-            Self::PlayMusic {
-                res_num,
-                delay,
-                pos,
-            } => f.pad(&format!(
+            Self::PlayMusic { res_id, delay, pos } => f.pad(&format!(
                 "song id:0x{:04X}, delay:0x{:04X}, pos:0x{:02X}",
-                res_num, delay, pos
+                res_id, delay, pos
             )),
             Self::Video1 { offset, x, y } => {
                 f.pad(&format!("video: off=0x{:02X} x={} y={}", offset, x, y))
             }
             Self::Video2 {
-                opcode: _,
+                cinematic: _,
                 offset,
                 x,
                 y,

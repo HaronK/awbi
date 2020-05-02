@@ -162,8 +162,13 @@ impl Video {
         res
     }
 
-    pub(crate) fn set_data_page(&mut self, page_idx: usize, offset: usize) {
-        self.data_page_idx = page_idx;
+    pub(crate) fn set_data_page(&mut self, cinematic: bool, offset: usize) {
+        self.data_page_idx = if cinematic {
+            self.res.get().seg_cinematic_idx()
+        } else {
+            self.res.get().seg_video2_idx()
+        };
+
         self.data_page_offset = offset;
     }
 
@@ -535,12 +540,12 @@ impl Video {
         }
     }
 
-    fn get_page_off(&self, page: usize) -> usize {
-        if page < self.pages_buf.len() {
-            page
-        } else if page == 0xFF {
+    fn get_page_off(&self, page_id: usize) -> usize {
+        if page_id < self.pages_buf.len() {
+            page_id
+        } else if page_id == 0xFF {
             self.cur_page_idx3
-        } else if page == 0xFE {
+        } else if page_id == 0xFE {
             self.cur_page_idx2
         } else {
             // warning("Video::getPagePtr() p != [0,1,2,3,0xFF,0xFE] == 0x%X", page);
@@ -574,18 +579,18 @@ impl Video {
 
     // This opcode is used once the background of a scene has been drawn in one of the framebuffer:
     // it is copied in the current framebuffer at the start of a new frame in order to improve performances.
-    pub(crate) fn copy_page(&mut self, src_page: usize, dst_page: usize, vscroll: i16) {
+    pub(crate) fn copy_page(&mut self, src_page_id: usize, dst_page_id: usize, vscroll: i16) {
         // debug(DBG_VIDEO, "Video::copyPage(%d, %d)", srcPageId, dstPageId);
 
-        if src_page == dst_page {
+        if src_page_id == dst_page_id {
             return;
         }
 
-        let src_mask = src_page & 0xBF;
-        let mut q = self.get_page_off(dst_page);
+        let src_mask = src_page_id & 0xBF;
+        let mut q = self.get_page_off(dst_page_id);
 
-        if src_page >= 0xFE {
-            let p = self.get_page_off(src_page);
+        if src_page_id >= 0xFE {
+            let p = self.get_page_off(src_page_id);
 
             self.pages_buf[q] = self.pages_buf[p];
         } else if (src_mask & 0x80) == 0 {
@@ -593,7 +598,7 @@ impl Video {
 
             self.pages_buf[q] = self.pages_buf[p];
         } else {
-            let mut p = self.get_page_off(src_page & 3);
+            let mut p = self.get_page_off(src_page_id & 3);
 
             if vscroll >= -199 && vscroll <= 199 {
                 let mut h = 200;
