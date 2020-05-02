@@ -24,12 +24,13 @@ impl Storage {
 
     pub fn load(&mut self) -> Result<()> {
         let mut bank = Bank::default();
-        for i in 1..=13 {
-            let mut f = bank.read_bank(&self.data_dir, i)?;
+        for bank_id in 1..=13 {
+            let mut f = bank.read_bank(&self.data_dir, bank_id)?;
             let data = f.read_all()?;
             self.banks.push(data);
         }
 
+        // load and parse memlist.bin
         self.mem_list.load()?;
 
         for me in &mut self.mem_list.entries {
@@ -42,7 +43,7 @@ impl Storage {
     }
 
     pub fn get_max_rank_entry_to_load(&mut self) -> Option<&mut MemEntry> {
-        let mut mem_entry: Option<&mut MemEntry> = None;
+        let mut mem_entry = None;
         let mut max_num = 0;
 
         for me in &mut self.mem_list.entries {

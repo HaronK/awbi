@@ -7,18 +7,18 @@ pub(crate) enum MemEntryState {
     Loaded,
     LoadMe,
     EndOfMemList,
+    Unknown(u8),
 }
 
 impl MemEntryState {
-    pub fn new(state: u8) -> Result<Self> {
-        let res = match state {
-            0 => MemEntryState::NotNeeded,
-            1 => MemEntryState::Loaded,
-            2 => MemEntryState::LoadMe,
-            0xFF => MemEntryState::EndOfMemList,
-            _ => bail!("Unknown entry state {}", state),
-        };
-        Ok(res)
+    pub fn new(state: u8) -> Self {
+        match state {
+            0 => Self::NotNeeded,
+            1 => Self::Loaded,
+            2 => Self::LoadMe,
+            0xFF => Self::EndOfMemList,
+            _ => Self::Unknown(state),
+        }
     }
 }
 
@@ -42,13 +42,13 @@ pub(crate) enum ResType {
 impl ResType {
     pub fn new(code: u8) -> Self {
         match code {
-            0 => ResType::Sound,
-            1 => ResType::Music,
-            2 => ResType::PolyAnim,
-            3 => ResType::Palette,
-            4 => ResType::Bytecode,
-            5 => ResType::PolyCinematic,
-            _ => ResType::Unknown(code),
+            0 => Self::Sound,
+            1 => Self::Music,
+            2 => Self::PolyAnim,
+            3 => Self::Palette,
+            4 => Self::Bytecode,
+            5 => Self::PolyCinematic,
+            _ => Self::Unknown(code),
         }
     }
 }
@@ -120,8 +120,14 @@ impl MemList {
         })?;
 
         loop {
+            let state = MemEntryState::new(f.read_u8()?);
+
+            if let MemEntryState::Unknown(state) = state {
+                bail!("Unknown entry state {}", state);
+            }
+
             let entry = MemEntry {
-                state: MemEntryState::new(f.read_u8()?)?,
+                state,
                 res_type: ResType::new(f.read_u8()?),
                 buf_offset: f.read_u16()? as usize,
                 unk4: f.read_u16()?,

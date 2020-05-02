@@ -195,12 +195,7 @@ impl Resource {
     #[trace]
     fn load_marked_as_needed(&mut self) -> Result<()> {
         loop {
-            let mut mem_entry = self.storage.get_max_rank_entry_to_load();
-
-            if let Some(me) = &mut mem_entry {
-                // At this point the resource descriptor should be pointed to "me"
-                // "That's what she said"
-
+            if let Some(me) = &mut self.storage.get_max_rank_entry_to_load() {
                 if me.bank_id == 0 {
                     // warning("Resource::load() ec=0x%X (me->bankId == 0)", 0xF00);
                     me.state = MemEntryState::NotNeeded;

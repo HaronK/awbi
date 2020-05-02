@@ -33,6 +33,7 @@ pub(crate) enum JmpType {
     Jge,
     Jl,
     Jle,
+    Unknown(u8),
 }
 
 impl JmpType {
@@ -44,7 +45,7 @@ impl JmpType {
             3 => Self::Jge,
             4 => Self::Jl,
             5 => Self::Jle,
-            _ => bail!("Command::parse() invalid jmp opcode {}", oc),
+            _ => Self::Unknown(oc),
         };
         Ok(res)
     }
@@ -59,6 +60,7 @@ impl fmt::Debug for JmpType {
             Self::Jge => f.pad("jge"),
             Self::Jl => f.pad("jl"),
             Self::Jle => f.pad("jle"),
+            Self::Unknown(code) => f.pad(&format!("unknown_jmp({})", code)),
         }
     }
 }
@@ -68,17 +70,17 @@ pub(crate) enum ResetType {
     Freeze,
     Unfreeze,
     Delete,
+    Unknown(u8),
 }
 
 impl ResetType {
-    fn new(oc: u8) -> Result<Self> {
-        let res = match oc {
+    fn new(oc: u8) -> Self {
+        match oc {
             0 => Self::Freeze,
             1 => Self::Unfreeze,
             2 => Self::Delete,
-            _ => bail!("Command::parse() invalid resetThread opcode {}", oc),
-        };
-        Ok(res)
+            _ => Self::Unknown(oc),
+        }
     }
 }
 
@@ -88,6 +90,7 @@ impl fmt::Debug for ResetType {
             Self::Freeze => f.pad("freezeChannels"),
             Self::Unfreeze => f.pad("unfreezeChannels"),
             Self::Delete => f.pad("deleteChannels"),
+            Self::Unknown(rt) => f.pad(&format!("unknown_reset_type({})", rt)),
         }
     }
 }
@@ -278,6 +281,10 @@ impl Command {
 
                 let jmp_type = JmpType::new(oc & 7)?;
 
+                if let JmpType::Unknown(jt) = jmp_type {
+                    bail!("Command::parse() invalid jmp opcode {}", jt)
+                }
+
                 Self::CondJmp {
                     jmp_type,
                     var_id,
@@ -291,7 +298,6 @@ impl Command {
             0x0C => {
                 let first = read_u8(data);
                 let last = read_u8(&data[1..]);
-                let reset_type = ResetType::new(read_u8(&data[2..]))?; // TODO: probably not always should be read. Compare with C++.
 
                 ensure!(
                     first <= last,
@@ -299,6 +305,12 @@ impl Command {
                     first,
                     last
                 );
+
+                let reset_type = ResetType::new(read_u8(&data[2..])); // TODO: probably not always should be read. Compare with C++.
+
+                if let ResetType::Unknown(rt) = reset_type {
+                    bail!("Command::parse() invalid resetThread opcode {}", rt);
+                }
 
                 Self::ResetThread {
                     first,

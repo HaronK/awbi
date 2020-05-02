@@ -5,7 +5,7 @@ use crate::{
     video::Point,
     vm_context::VmContext,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use std::{collections::HashMap, fmt};
 
 const COLOR_BLACK: u8 = 0xFF;
@@ -151,6 +151,7 @@ impl Program {
                         JmpType::Jge => val1 >= val2,
                         JmpType::Jl => val1 < val2,
                         JmpType::Jle => val1 <= val2,
+                        JmpType::Unknown(_) => false, // NOTE: we should not come here
                     };
 
                     if cond {
