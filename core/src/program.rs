@@ -1,12 +1,15 @@
 use crate::{
     command::{Command, JmpType, OpType, ResetType},
     parts::GAME_PART_FIRST,
+    staticres::*,
     video::Point,
-    vm::{COLOR_BLACK, DEFAULT_ZOOM, VM_VARIABLE_SCROLL_Y},
     vm_context::VmContext,
 };
 use anyhow::{anyhow, Result};
 use std::{collections::HashMap, fmt};
+
+const COLOR_BLACK: u8 = 0xFF;
+const DEFAULT_ZOOM: u16 = 0x0040;
 
 pub(crate) struct Program {
     part_id: u16,

@@ -112,7 +112,7 @@ pub(crate) type ResourceRef = Ref<Box<Resource>>;
 
 pub(crate) struct Resource {
     pub storage: Storage,
-    pub requested_next_part: u16,
+    pub requested_next_part: Option<u16>,
     pub mem_buf: [u8; MEM_BLOCK_SIZE],
     data: ResourceData,
 }
@@ -121,7 +121,7 @@ impl Resource {
     pub fn new(storage: Storage) -> Self {
         Self {
             storage,
-            requested_next_part: 0,
+            requested_next_part: None,
             mem_buf: [0; MEM_BLOCK_SIZE],
             data: Default::default(),
         }
@@ -251,7 +251,7 @@ impl Resource {
     #[trace]
     pub fn load_parts_or_mem_entry(&mut self, resource_id: u16) -> Result<()> {
         if resource_id as usize > self.storage.mem_list.entries.len() {
-            self.requested_next_part = resource_id;
+            self.requested_next_part = Some(resource_id);
         } else {
             let mut me = &mut self.storage.mem_list.entries[resource_id as usize];
 

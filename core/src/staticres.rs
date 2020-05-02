@@ -2,10 +2,38 @@ use crate::video::*;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
+pub const VM_VARIABLE_RANDOM_SEED: usize = 0x3C;
+pub const VM_VARIABLE_LAST_KEYCHAR: usize = 0xDA;
+pub const VM_VARIABLE_HERO_POS_UP_DOWN: usize = 0xE5;
+pub const VM_VARIABLE_MUS_MARK: usize = 0xF4;
+pub const VM_VARIABLE_SCROLL_Y: usize = 0xF9; // = 239
+pub const VM_VARIABLE_HERO_ACTION: usize = 0xFA;
+pub const VM_VARIABLE_HERO_POS_JUMP_DOWN: usize = 0xFB;
+pub const VM_VARIABLE_HERO_POS_LEFT_RIGHT: usize = 0xFC;
+pub const VM_VARIABLE_HERO_POS_MASK: usize = 0xFD;
+pub const VM_VARIABLE_HERO_ACTION_POS_MASK: usize = 0xFE;
+pub const VM_VARIABLE_PAUSE_SLICES: usize = 0xFF;
+
 #[rustfmt::skip::macros(lazy_static)]
 
 lazy_static! {
     // pub static ref OPCODE_TABLE: Vec<FnMut()> = [];
+
+    pub static ref VARIABLE_NAME_BY_INDEX: HashMap<usize, &'static str> = {
+        let mut m = HashMap::new();
+        m.insert(VM_VARIABLE_RANDOM_SEED, "RANDOM_SEED");
+        m.insert(VM_VARIABLE_LAST_KEYCHAR, "LAST_KEYCHAR");
+        m.insert(VM_VARIABLE_HERO_POS_UP_DOWN, "HERO_POS_UP_DOWN");
+        m.insert(VM_VARIABLE_MUS_MARK, "MUS_MARK");
+        m.insert(VM_VARIABLE_SCROLL_Y, "SCROLL_Y");
+        m.insert(VM_VARIABLE_HERO_ACTION, "HERO_ACTION");
+        m.insert(VM_VARIABLE_HERO_POS_JUMP_DOWN, "HERO_POS_JUMP_DOWN");
+        m.insert(VM_VARIABLE_HERO_POS_LEFT_RIGHT, "HERO_POS_LEFT_RIGHT");
+        m.insert(VM_VARIABLE_HERO_POS_MASK, "HERO_POS_MASK");
+        m.insert(VM_VARIABLE_HERO_ACTION_POS_MASK, "HERO_ACTION_POS_MASK");
+        m.insert(VM_VARIABLE_PAUSE_SLICES, "PAUSE_SLICES");
+        m
+    };
 
     pub static ref FREQUENCE_TABLE: [u16; 40] = [
         0x0CFF, 0x0DC3, 0x0E91, 0x0F6F, 0x1056, 0x114E, 0x1259, 0x136C,
@@ -65,22 +93,6 @@ lazy_static! {
         0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0xFE, 0x00, 0x38, 0x44, 0xBA, 0xA2, 0xBA, 0x44, 0x38, 0x00,
         0x38, 0x44, 0x82, 0x82, 0x44, 0x28, 0xEE, 0x00, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA,
     ];
-
-    pub static ref VARIABLE_NAME_BY_INDEX: HashMap<u8, &'static str> = {
-        let mut m = HashMap::new();
-        m.insert(0x3C, "RANDOM_SEED");
-        m.insert(0xDA, "LAST_KEYCHAR");
-        m.insert(0xE5, "HERO_POS_UP_DOWN");
-        m.insert(0xF4, "MUS_MARK");
-        m.insert(0xF9, "SCROLL_Y");
-        m.insert(0xFA, "HERO_ACTION");
-        m.insert(0xFB, "HERO_POS_JUMP_DOWN");
-        m.insert(0xFC, "HERO_POS_LEFT_RIGHT");
-        m.insert(0xFD, "HERO_POS_MASK");
-        m.insert(0xFE, "HERO_ACTION_POS_MASK");
-        m.insert(0xFF, "PAUSE_SLICES");
-        m
-    };
 
     pub static ref STRINGS_TABLE_ENG: HashMap<u16, &'static str> = {
         let mut m = HashMap::new();

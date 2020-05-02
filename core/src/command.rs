@@ -103,7 +103,7 @@ fn read_u16(data: &[u8]) -> u16 {
 }
 
 fn var_name(id: u8) -> String {
-    if let Some(name) = VARIABLE_NAME_BY_INDEX.get(&id) {
+    if let Some(name) = VARIABLE_NAME_BY_INDEX.get(&(id as usize)) {
         name.to_string()
     } else {
         format!("0x{:02X}", id)

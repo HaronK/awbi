@@ -44,18 +44,6 @@ impl Engine {
     }
 
     #[trace]
-    fn run(&mut self) -> Result<()> {
-        while !self.is_quit() {
-            self.vm.check_thread_requests()?;
-            self.vm.inp_update_player();
-            self.process_input()?;
-            self.vm.host_frame()?;
-        }
-
-        Ok(())
-    }
-
-    #[trace]
     fn init(&mut self) -> Result<()> {
         //Init system
         self.sys.get_mut().init("Out Of This World");
@@ -81,6 +69,18 @@ impl Engine {
     }
 
     #[trace]
+    fn run(&mut self) -> Result<()> {
+        while !self.is_quit() {
+            self.vm.check_thread_requests()?;
+            self.vm.inp_update_player();
+            self.process_input()?;
+            self.vm.host_frame()?;
+        }
+
+        Ok(())
+    }
+
+    #[trace]
     fn process_input(&mut self) -> Result<()> {
         let mut sys = self.sys.get_mut();
 
@@ -95,7 +95,7 @@ impl Engine {
             todo!();
         }
         if sys.input().fast_mode {
-            self.vm.fast_mode = !self.vm.fast_mode;
+            self.vm.toggle_fast_mode();
             sys.input_mut().fast_mode = false;
         }
         if sys.input().state_slot != 0 {
