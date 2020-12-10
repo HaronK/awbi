@@ -72,6 +72,11 @@ impl Program {
         Ok(())
     }
 
+    pub fn start(&mut self) {
+        self.ip = 0;
+        self.active = true;
+    }
+
     pub fn exec(&mut self, ctx: &mut VmContext) -> Result<()> {
         if !self.active {
             return Ok(());
@@ -283,6 +288,8 @@ mod tests {
     use anyhow::Result;
     use std::fs::File;
     use std::io::prelude::*;
+
+    // cargo test test_all_progs -- --nocapture
 
     #[test]
     fn test_all_progs() -> Result<()> {

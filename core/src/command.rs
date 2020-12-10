@@ -67,6 +67,7 @@ impl fmt::Debug for JmpType {
 
 #[derive(PartialEq)]
 pub(crate) enum ResetType {
+    None,
     Freeze,
     Unfreeze,
     Delete,
@@ -87,6 +88,7 @@ impl ResetType {
 impl fmt::Debug for ResetType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
+            Self::None => f.pad("NONE"),
             Self::Freeze => f.pad("freezeChannels"),
             Self::Unfreeze => f.pad("unfreezeChannels"),
             Self::Delete => f.pad("deleteChannels"),
@@ -299,23 +301,26 @@ impl Command {
                 let first = read_u8(data);
                 let last = read_u8(&data[1..]);
 
-                ensure!(
-                    first <= last,
-                    "Command::parse(): first({}) > last({})",
-                    first,
-                    last
-                );
+                if last < first {
+                    println!("Command::parse(): first({}) > last({})", first, last);
 
-                let reset_type = ResetType::new(read_u8(&data[2..])); // TODO: probably not always should be read. Compare with C++.
+                    Self::ResetThread {
+                        reset_type: ResetType::None,
+                        first,
+                        last,
+                    }
+                } else {
+                    let reset_type = ResetType::new(read_u8(&data[2..]));
 
-                if let ResetType::Unknown(rt) = reset_type {
-                    bail!("Command::parse() invalid resetThread opcode {}", rt);
-                }
+                    if let ResetType::Unknown(rt) = reset_type {
+                        println!("Command::parse() invalid resetThread opcode {}", rt);
+                    }
 
-                Self::ResetThread {
-                    first,
-                    last,
-                    reset_type, // TODO: probably not always should be read. Compare with C++.
+                    Self::ResetThread {
+                        reset_type,
+                        first,
+                        last,
+                    }
                 }
             }
             0x0D => Self::SelectVideoPage {

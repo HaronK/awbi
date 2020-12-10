@@ -1,6 +1,7 @@
-use crate::{resource::*, serializer::*, system::*, vm_context::*};
+use crate::{program::Program, resource::*, serializer::*, system::*, vm_context::*};
 use anyhow::Result;
 
+use std::collections::HashMap;
 use trace::trace;
 
 trace::init_depth_var!();
@@ -18,6 +19,8 @@ pub(crate) struct VirtualMachine {
     goto_next_thread: bool,
 
     ctx: VmContext,
+    programs: HashMap<usize, Program>,
+    program_id: usize,
 }
 
 impl VirtualMachine {
@@ -34,6 +37,8 @@ impl VirtualMachine {
             stack_ptr: 0,
             goto_next_thread: false,
             ctx,
+            programs: HashMap::new(),
+            program_id: 0,
         }
     }
 
@@ -44,7 +49,23 @@ impl VirtualMachine {
 
     #[trace]
     pub fn init_for_part(&mut self, part_id: u16) -> Result<()> {
-        self.ctx.init_for_part(part_id)
+        self.ctx.init_for_part(part_id)?;
+
+        self.program_id = self.res.get().seg_code_idx();
+
+        if self.programs.get(&self.program_id).is_none() {
+            let mut program = Program::new(
+                part_id,
+                self.res.get().get_entry_data(self.program_id).into(),
+            );
+
+            program.parse()?;
+            program.start();
+
+            self.programs.insert(self.program_id, program);
+        }
+
+        Ok(())
     }
 
     pub fn toggle_fast_mode(&mut self) {
@@ -96,7 +117,7 @@ impl VirtualMachine {
         // A thread must feature a break opcode so the interpreter can move to the next thread.
 
         for thread_id in 0..VM_NUM_THREADS {
-            if self.ctx.threads_data[thread_id].cur_state_active {
+            if !self.ctx.threads_data[thread_id].cur_state_active {
                 continue;
             }
 

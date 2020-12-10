@@ -19,6 +19,6 @@ Cargo.lock
 
 .vscode
 
-/data
+/data/*
 
 resource-0x*.asm

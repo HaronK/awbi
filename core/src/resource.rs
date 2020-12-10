@@ -180,6 +180,10 @@ impl Resource {
         u16::from_be_bytes([b1, b2])
     }
 
+    pub fn get_entry_data(&self, id: usize) -> &[u8] {
+        &self.storage.mem_list.entries[id].buffer
+    }
+
     // #[trace]
     pub fn read_palette(&self, offset: usize, size: usize) -> &[u8] {
         self.mem_to_slice(self.data.seg_palette_idx + offset, size)
@@ -218,7 +222,7 @@ impl Resource {
                         //     .from_slice(&data, self.storage.script_cur_off);
                         let off = me.buf_offset as usize;
                         self.mem_buf[off..off + data.len()].copy_from_slice(&data);
-                        // me.buffer = data;
+                        me.buffer = data.into();
                         me.state = MemEntryState::Loaded;
                         self.data.script_cur_off += me.size as usize;
                     }
@@ -243,6 +247,13 @@ impl Resource {
         self.data.script_cur_off = 0;
     }
 
+    // This method serves two purpose:
+    // - Load parts in memory segments (palette,code,video1,video2)
+    //     or
+    // - Load a resource in memory
+
+    // This is decided based on the resourceId. If it does not match a mementry id it is supposed to
+    // be a part id.
     #[trace]
     pub fn load_parts_or_mem_entry(&mut self, resource_id: u16) -> Result<()> {
         if resource_id as usize > self.storage.mem_list.entries.len() {
