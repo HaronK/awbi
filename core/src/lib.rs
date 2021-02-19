@@ -13,6 +13,7 @@ mod reference;
 mod resource;
 mod serializer;
 mod sfxplayer;
+mod slice_reader;
 mod staticres;
 mod storage;
 mod system;

@@ -1,4 +1,4 @@
-use crate::staticres::*;
+use crate::{slice_reader::SliceReader, staticres::*};
 use anyhow::{bail, ensure, Result};
 use std::fmt;
 
@@ -95,16 +95,6 @@ impl fmt::Debug for ResetType {
             Self::Unknown(rt) => f.pad(&format!("unknown_reset_type({})", rt)),
         }
     }
-}
-
-#[inline]
-fn read_u8(data: &[u8]) -> u8 {
-    data[0]
-}
-
-#[inline]
-fn read_u16(data: &[u8]) -> u16 {
-    u16::from_be_bytes([data[0], data[1]])
 }
 
 fn var_name(id: u8) -> String {
@@ -228,55 +218,52 @@ pub(crate) enum Command {
         x: OpType,
         y: OpType,
         zoom: OpType,
-        size: usize,
     },
 }
 
 impl Command {
-    pub fn parse(opcode: u8, data: &[u8]) -> Result<Self> {
+    pub fn parse(opcode: u8, sr: &mut SliceReader) -> Result<Self> {
         let res = match opcode {
             0x00 => Self::MovConst {
-                var_id: OpVar(read_u8(data)),
-                val: read_u16(&data[1..]),
+                var_id: OpVar(sr.read_u8()),
+                val: sr.read_u16(),
             },
             0x01 => Self::Mov {
-                dst_id: OpVar(read_u8(data)),
-                src_id: OpVar(read_u8(&data[1..])),
+                dst_id: OpVar(sr.read_u8()),
+                src_id: OpVar(sr.read_u8()),
             },
             0x02 => Self::Add {
-                dst_id: OpVar(read_u8(data)),
-                src_id: OpVar(read_u8(&data[1..])),
+                dst_id: OpVar(sr.read_u8()),
+                src_id: OpVar(sr.read_u8()),
             },
             0x03 => Self::AddConst {
-                var_id: OpVar(read_u8(data)),
-                val: read_u16(&data[1..]),
+                var_id: OpVar(sr.read_u8()),
+                val: sr.read_u16(),
             },
             0x04 => Self::Call {
-                offset: read_u16(data),
+                offset: sr.read_u16(),
             },
             0x05 => Self::Ret,
             0x06 => Self::PauseThread,
             0x07 => Self::Jmp {
-                offset: read_u16(data),
+                offset: sr.read_u16(),
             },
             0x08 => Self::SetVect {
-                thr_id: read_u8(data),
-                offset: read_u16(&data[1..]),
+                thr_id: sr.read_u8(),
+                offset: sr.read_u16(),
             },
             0x09 => Self::Jnz {
-                var_id: OpVar(read_u8(data)),
-                offset: read_u16(&data[1..]),
+                var_id: OpVar(sr.read_u8()),
+                offset: sr.read_u16(),
             },
             0x0A => {
-                let oc = read_u8(data);
-                let var_id = OpVar(read_u8(&data[1..]));
-                let c = read_u8(&data[2..]);
-                let mut shift = 0;
+                let oc = sr.read_u8();
+                let var_id = OpVar(sr.read_u8());
+                let c = sr.read_u8();
                 let op2 = if oc & 0x80 != 0 {
                     OpType::Var(c)
                 } else if oc & 0x40 != 0 {
-                    shift = 1;
-                    OpType::Val2((c as u16) * 256 + read_u8(&data[3..]) as u16)
+                    OpType::Val2((c as u16) * 256 + sr.read_u8() as u16)
                 } else {
                     OpType::Val1(c)
                 };
@@ -291,15 +278,15 @@ impl Command {
                     jmp_type,
                     var_id,
                     op2,
-                    offset: read_u16(&data[3 + shift..]),
+                    offset: sr.read_u16(),
                 }
             }
             0x0B => Self::SetPalette {
-                pal_id: read_u16(data),
+                pal_id: sr.read_u16(),
             },
             0x0C => {
-                let first = read_u8(data);
-                let last = read_u8(&data[1..]);
+                let first = sr.read_u8();
+                let last = sr.read_u8();
 
                 if last < first {
                     println!("Command::parse(): first({}) > last({})", first, last);
@@ -310,7 +297,7 @@ impl Command {
                         last,
                     }
                 } else {
-                    let reset_type = ResetType::new(read_u8(&data[2..]));
+                    let reset_type = ResetType::new(sr.read_u8());
 
                     if let ResetType::Unknown(rt) = reset_type {
                         println!("Command::parse() invalid resetThread opcode {}", rt);
@@ -324,66 +311,66 @@ impl Command {
                 }
             }
             0x0D => Self::SelectVideoPage {
-                page_id: read_u8(data),
+                page_id: sr.read_u8(),
             },
             0x0E => Self::FillVideoPage {
-                page_id: read_u8(data),
-                color: read_u8(&data[1..]),
+                page_id: sr.read_u8(),
+                color: sr.read_u8(),
             },
             0x0F => Self::CopyVideoPage {
-                src_page_id: read_u8(data),
-                dst_page_id: read_u8(&data[1..]),
+                src_page_id: sr.read_u8(),
+                dst_page_id: sr.read_u8(),
             },
             0x10 => Self::BlitFramebuffer {
-                page_id: read_u8(data),
+                page_id: sr.read_u8(),
             },
             0x11 => Self::KillThread,
             0x12 => Self::DrawString {
-                str_id: read_u16(data),
-                x: read_u8(&data[2..]),
-                y: read_u8(&data[3..]),
-                color: read_u8(&data[4..]),
+                str_id: sr.read_u16(),
+                x: sr.read_u8(),
+                y: sr.read_u8(),
+                color: sr.read_u8(),
             },
             0x13 => Self::Sub {
-                dst_id: OpVar(read_u8(data)),
-                src_id: OpVar(read_u8(&data[1..])),
+                dst_id: OpVar(sr.read_u8()),
+                src_id: OpVar(sr.read_u8()),
             },
             0x14 => Self::And {
-                var_id: OpVar(read_u8(data)),
-                val: read_u16(&data[1..]),
+                var_id: OpVar(sr.read_u8()),
+                val: sr.read_u16(),
             },
             0x15 => Self::Or {
-                var_id: OpVar(read_u8(data)),
-                val: read_u16(&data[1..]),
+                var_id: OpVar(sr.read_u8()),
+                val: sr.read_u16(),
             },
             0x16 => Self::Shl {
-                var_id: OpVar(read_u8(data)),
-                val: read_u16(&data[1..]),
+                var_id: OpVar(sr.read_u8()),
+                val: sr.read_u16(),
             },
             0x17 => Self::Shr {
-                var_id: OpVar(read_u8(data)),
-                val: read_u16(&data[1..]),
+                var_id: OpVar(sr.read_u8()),
+                val: sr.read_u16(),
             },
             0x18 => Self::PlaySound {
-                res_id: read_u16(data),
-                freq: read_u8(&data[2..]),
-                vol: read_u8(&data[3..]),
-                channel: read_u8(&data[4..]),
+                res_id: sr.read_u16(),
+                freq: sr.read_u8(),
+                vol: sr.read_u8(),
+                channel: sr.read_u8(),
             },
             0x19 => Self::UpdateMemList {
-                res_id: read_u16(data),
+                res_id: sr.read_u16(),
             },
             0x1A => Self::PlayMusic {
-                res_id: read_u16(data),
-                delay: read_u16(&data[2..]),
-                pos: read_u8(&data[4..]),
+                res_id: sr.read_u16(),
+                delay: sr.read_u16(),
+                pos: sr.read_u8(),
             },
             _ => {
                 if opcode & 0x80 != 0 {
                     let offset =
-                        ((((opcode as usize) << 8) | (read_u8(data) as usize)) * 2) & 0xFFFF;
-                    let mut x = read_u8(&data[1..]);
-                    let mut y = read_u8(&data[2..]);
+                        ((((opcode as usize) << 8) | (sr.read_u8() as usize)) * 2) & 0xFFFF;
+                    let mut x = sr.read_u8();
+                    let mut y = sr.read_u8();
 
                     if y > 199 {
                         y = 199;
@@ -392,14 +379,12 @@ impl Command {
 
                     Self::Video1 { offset, x, y }
                 } else if opcode & 0x40 != 0 {
-                    let mut shift = 0;
-                    let offset = (read_u16(data) as usize) * 2;
+                    let offset = (sr.read_u16() as usize) * 2;
+                    let x_val = sr.read_u8();
 
-                    let x_val = read_u8(&data[2..]);
                     let x = if opcode & 0x20 == 0 {
                         if opcode & 0x10 == 0 {
-                            shift = 1;
-                            OpType::Val2(((x_val as u16) << 8) | (read_u8(&data[3..]) as u16))
+                            OpType::Val2(((x_val as u16) << 8) | (sr.read_u8() as u16))
                         } else {
                             OpType::Var(x_val)
                         }
@@ -409,13 +394,10 @@ impl Command {
                         OpType::Val1(x_val)
                     };
 
-                    let y_val = read_u8(&data[3 + shift..]);
+                    let y_val = sr.read_u8();
                     let y = if opcode & 8 == 0 {
                         if opcode & 4 == 0 {
-                            shift += 1;
-                            OpType::Val2(
-                                ((y_val as u16) << 8) | (read_u8(&data[3 + shift..]) as u16),
-                            )
+                            OpType::Val2(((y_val as u16) << 8) | (sr.read_u8() as u16))
                         } else {
                             OpType::Var(y_val)
                         }
@@ -424,21 +406,17 @@ impl Command {
                     };
 
                     let mut cinematic = true;
-                    let mut zoom_corr = 0;
-                    let zoom_val = read_u8(&data[4 + shift..]);
                     let zoom = if opcode & 2 == 0 {
                         if opcode & 1 == 0 {
-                            zoom_corr = 1;
                             OpType::Val1(0x40)
                         } else {
-                            OpType::Var(zoom_val)
+                            OpType::Var(sr.read_u8())
                         }
                     } else if opcode & 1 != 0 {
-                        zoom_corr = 1;
                         cinematic = false;
                         OpType::Val1(0x40)
                     } else {
-                        OpType::Val1(zoom_val)
+                        OpType::Val1(sr.read_u8())
                     };
 
                     Self::Video2 {
@@ -447,7 +425,6 @@ impl Command {
                         x,
                         y,
                         zoom,
-                        size: 5 + shift - zoom_corr,
                     }
                 } else {
                     bail!("Command::parse() invalid opcode=0x{:02X}", opcode);
@@ -456,101 +433,6 @@ impl Command {
         };
 
         Ok(res)
-    }
-
-    pub fn args_size(&self) -> usize {
-        match self {
-            Self::MovConst { var_id: _, val: _ } => 3,
-            Self::Mov {
-                dst_id: _,
-                src_id: _,
-            } => 2,
-            Self::Add {
-                dst_id: _,
-                src_id: _,
-            } => 2,
-            Self::AddConst { var_id: _, val: _ } => 3,
-            Self::Call { offset: _ } => 2,
-            Self::Ret => 0,
-            Self::PauseThread => 0,
-            Self::Jmp { offset: _ } => 2,
-            Self::SetVect {
-                thr_id: _,
-                offset: _,
-            } => 3,
-            Self::Jnz {
-                var_id: _,
-                offset: _,
-            } => 3,
-            Self::CondJmp {
-                jmp_type: _,
-                var_id: _,
-                op2,
-                offset: _,
-            } => {
-                if let OpType::Val2(_) = op2 {
-                    6
-                } else {
-                    5
-                }
-            }
-            Self::SetPalette { pal_id: _ } => 2,
-            Self::ResetThread {
-                reset_type: _,
-                first: _,
-                last: _,
-            } => 3, // TODO: check this with C++
-            Self::SelectVideoPage { page_id: _ } => 1,
-            Self::FillVideoPage {
-                page_id: _,
-                color: _,
-            } => 2,
-            Self::CopyVideoPage {
-                src_page_id: _,
-                dst_page_id: _,
-            } => 2,
-            Self::BlitFramebuffer { page_id: _ } => 1,
-            Self::KillThread => 0,
-            Self::DrawString {
-                str_id: _,
-                x: _,
-                y: _,
-                color: _,
-            } => 5,
-            Self::Sub {
-                dst_id: _,
-                src_id: _,
-            } => 2,
-            Self::And { var_id: _, val: _ } => 3,
-            Self::Or { var_id: _, val: _ } => 3,
-            Self::Shl { var_id: _, val: _ } => 3,
-            Self::Shr { var_id: _, val: _ } => 3,
-            Self::PlaySound {
-                res_id: _,
-                freq: _,
-                vol: _,
-                channel: _,
-            } => 5,
-            Self::UpdateMemList { res_id: _ } => 2,
-            Self::PlayMusic {
-                res_id: _,
-                delay: _,
-                pos: _,
-            } => 5,
-            Self::Video1 {
-                offset: _,
-                x: _,
-                y: _,
-            } => 3,
-            Self::Video2 {
-                cinematic: _,
-                offset: _,
-                x: _,
-                y: _,
-                zoom: _,
-                size,
-            } => *size,
-        }
     }
 }
 
@@ -647,7 +529,6 @@ impl fmt::Debug for Command {
                 x,
                 y,
                 zoom,
-                size: _,
             } => f.pad(&format!(
                 "video2: off=0x{:X} x={:?} y={:?} zoom:{:?}",
                 offset, x, y, zoom

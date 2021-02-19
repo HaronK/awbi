@@ -1,6 +1,7 @@
 use crate::{
     command::{Command, JmpType, OpType, ResetType},
     parts::GAME_PART_FIRST,
+    slice_reader::SliceReader,
     staticres::*,
     video::Point,
     vm_context::VmContext,
@@ -54,17 +55,17 @@ impl Program {
     pub fn parse(&mut self) -> Result<()> {
         self.instructions.clear();
 
-        let mut ip = 0;
-        while ip < self.code.len() {
-            let opcode = self.code[ip];
-            let cmd = Command::parse(opcode, &self.code[ip + 1..])?;
-            let args_size = cmd.args_size();
+        let mut slice_reader = SliceReader::new(&self.code);
+        while slice_reader.can_read() {
+            let ip = slice_reader.ip();
+            let opcode = slice_reader.read_u8();
+            let cmd = Command::parse(opcode, &mut slice_reader)?;
+
+            // println!("{:05X}: {:?}", ip, cmd);
 
             self.addr_ip.insert(ip as u16, self.instructions.len());
 
             self.instructions.push((ip, cmd));
-
-            ip += 1 + args_size;
         }
 
         // TODO: replace jump instructions offsets with ip offsets using addr_ip
@@ -244,7 +245,6 @@ impl Program {
                     x,
                     y,
                     zoom,
-                    size: _,
                 } => {
                     let x_val = match x {
                         OpType::Var(var_id) => ctx.variables[*var_id as usize],
