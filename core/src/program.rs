@@ -85,6 +85,9 @@ impl Program {
         let mut run = true;
         while run {
             let (addr, cmd) = &self.instructions[self.ip];
+
+            println!("{:04x}/{}: {:?}", self.ip, addr, cmd);
+
             match cmd {
                 Command::MovConst { var_id, val } => {
                     ctx.variables[var_id.0 as usize] = *val as i16;

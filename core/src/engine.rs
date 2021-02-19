@@ -80,7 +80,7 @@ impl Engine {
         Ok(())
     }
 
-    #[trace]
+    // #[trace]
     fn process_input(&mut self) -> Result<()> {
         let mut sys = self.sys.get_mut();
 
@@ -220,8 +220,9 @@ mod tests {
         }
     }
 
+    // cargo test test_engine -- --nocapture
     #[test]
-    #[ignore]
+    // #[ignore]
     fn test_engine() -> Result<()> {
         let data_dir = data_dir()?;
         let sys: Ref<Box<(dyn System)>> = Ref::new(Box::new(SystemMock::default()));

@@ -75,10 +75,12 @@ impl VirtualMachine {
     /*
          This is called every frames in the infinite loop.
     */
+    // #[trace]
     pub fn check_thread_requests(&mut self) -> Result<()> {
         //Check if a part switch has been requested.
         let requested_next_part = self.res.get().requested_next_part;
         if let Some(requested_next_part) = requested_next_part {
+            println!("\requested_next_part={:#04x}", requested_next_part);
             self.init_for_part(requested_next_part)?;
             self.res.get_mut().requested_next_part = None;
         }
@@ -101,6 +103,7 @@ impl VirtualMachine {
             let n = self.ctx.threads_data[thread_id].requested_pc_offset;
 
             if n != VM_NO_SETVEC_REQUESTED {
+                println!("\tn={:#04x}", n);
                 self.ctx.threads_data[thread_id].pc_offset =
                     if n == 0xFFFE { VM_INACTIVE_THREAD } else { n };
                 self.ctx.threads_data[thread_id].requested_pc_offset = VM_NO_SETVEC_REQUESTED;
@@ -110,7 +113,7 @@ impl VirtualMachine {
         Ok(())
     }
 
-    #[trace]
+    // #[trace]
     pub fn host_frame(&mut self) -> Result<()> {
         // Run the Virtual Machine for every active threads (one vm frame).
         // Inactive threads are marked with a thread instruction pointer set to 0xFFFF (VM_INACTIVE_THREAD).
@@ -120,6 +123,8 @@ impl VirtualMachine {
             if !self.ctx.threads_data[thread_id].cur_state_active {
                 continue;
             }
+
+            println!("TEST");
 
             let n = self.ctx.threads_data[thread_id].pc_offset;
 
@@ -169,6 +174,7 @@ impl VirtualMachine {
         Ok(())
     }
 
+    // #[trace]
     pub fn inp_update_player(&mut self) {
         self.ctx.inp_update_player();
     }

@@ -639,7 +639,7 @@ impl fmt::Debug for Command {
                 res_id, delay, pos
             )),
             Self::Video1 { offset, x, y } => {
-                f.pad(&format!("video: off=0x{:02X} x={} y={}", offset, x, y))
+                f.pad(&format!("video1: off=0x{:02X} x={} y={}", offset, x, y))
             }
             Self::Video2 {
                 cinematic: _,
@@ -649,7 +649,7 @@ impl fmt::Debug for Command {
                 zoom,
                 size: _,
             } => f.pad(&format!(
-                "video: off=0x{:X} x={:?} y={:?} zoom:{:?}",
+                "video2: off=0x{:X} x={:?} y={:?} zoom:{:?}",
                 offset, x, y, zoom
             )),
         }
