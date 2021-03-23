@@ -1,3 +1,8 @@
+use std::{
+    fmt,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
 use crate::{
     file::File, memlist::MemEntryState, mixer::*, parts::*, reference::Ref, resource::ResourceRef,
     serializer::*, sfxplayer::SfxPlayer, staticres::*, system::*, video::Video,
@@ -10,7 +15,7 @@ trace::init_depth_var!();
 pub const VM_NUM_THREADS: usize = 64;
 const VM_NUM_VARIABLES: usize = 256;
 
-#[derive(Default, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub(crate) struct ThreadData {
     // This array is used:
     //     To save the channel's instruction pointer
@@ -21,6 +26,29 @@ pub(crate) struct ThreadData {
 
     pub cur_state_active: bool,
     pub requested_state_active: bool,
+}
+
+impl Default for ThreadData {
+    fn default() -> Self {
+        Self {
+            pc_offset: 0xFFFF,
+            requested_pc_offset: 0xFFFF,
+            cur_state_active: true,
+            requested_state_active: true,
+        }
+    }
+}
+
+impl fmt::Debug for ThreadData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.pad(&format!(
+            "[{:04X}, {:04X}, {}, {}]",
+            self.pc_offset,
+            self.requested_pc_offset,
+            self.cur_state_active,
+            self.requested_state_active
+        ))
+    }
 }
 
 pub(crate) struct VmContext {
@@ -71,7 +99,10 @@ impl VmContext {
 
         self.variables = [0; VM_NUM_VARIABLES];
         self.variables[0x54] = 0x81;
-        self.variables[VM_VARIABLE_RANDOM_SEED] = 0; //time(0); // TODO: fix this
+        self.variables[VM_VARIABLE_RANDOM_SEED] = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Cannot get current time")
+            .as_secs() as i16;
 
         self.fast_mode = false;
         // self.player.mark_var = &self.vm_variables[VM_VARIABLE_MUS_MARK]; // TODO: uncomment
@@ -288,6 +319,43 @@ impl VmContext {
 
         self.player.save_or_load(ser)?;
         self.mixer.get_mut().save_or_load(ser)
+    }
+}
+
+impl fmt::Debug for VmContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VmContext")
+            .field(
+                "script_stack_calls",
+                &self
+                    .script_stack_calls
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+            .field("fast_mode", &self.fast_mode)
+            .field("last_time_stamp", &self.last_time_stamp)
+            .field(
+                "variables",
+                &self
+                    .variables
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+            .field(
+                "threads_data",
+                &self
+                    .threads_data
+                    .iter()
+                    .map(|v| format!("{:?}", v))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            )
+            // .field("threads_data", &self.threads_data)
+            .finish()
     }
 }
 

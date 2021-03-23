@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::file::File;
 use crate::parts::*;
 use crate::reference::*;
@@ -164,6 +166,19 @@ impl Engine {
     }
 }
 
+impl fmt::Debug for Engine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Engine")
+            .field("data_dir", &self.data_dir)
+            .field("save_dir", &self.save_dir)
+            .field("state_slot", &self.state_slot)
+            // .field("sys", &self.sys.get())
+            .field("vm", &self.vm)
+            .field("res", &self.res.get())
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,6 +244,7 @@ mod tests {
         let mut engine = Engine::new(sys, data_dir.to_str().unwrap(), data_dir.to_str().unwrap());
 
         engine.init()?;
+        println!("=== Engine State ===\n{:#?}=== Engine State ===", engine);
         engine.run()
     }
 }

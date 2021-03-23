@@ -1,7 +1,7 @@
-use crate::{program::Program, resource::*, serializer::*, system::*, vm_context::*};
+use crate::{program::Program, resource::*, serializer::*, system::*, video::Video, vm_context::*};
 use anyhow::Result;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 use trace::trace;
 
 trace::init_depth_var!();
@@ -75,7 +75,7 @@ impl VirtualMachine {
     /*
          This is called every frames in the infinite loop.
     */
-    // #[trace]
+    #[trace]
     pub fn check_thread_requests(&mut self) -> Result<()> {
         //Check if a part switch has been requested.
         let requested_next_part = self.res.get().requested_next_part;
@@ -113,7 +113,7 @@ impl VirtualMachine {
         Ok(())
     }
 
-    // #[trace]
+    #[trace]
     pub fn host_frame(&mut self) -> Result<()> {
         // Run the Virtual Machine for every active threads (one vm frame).
         // Inactive threads are marked with a thread instruction pointer set to 0xFFFF (VM_INACTIVE_THREAD).
@@ -121,6 +121,7 @@ impl VirtualMachine {
 
         for thread_id in 0..VM_NUM_THREADS {
             if !self.ctx.threads_data[thread_id].cur_state_active {
+                println!("\tVirtualMachine::host_frame(skip) thread_id={}", thread_id);
                 continue;
             }
 
@@ -170,7 +171,9 @@ impl VirtualMachine {
 
     #[trace]
     fn execute_opcode(&mut self, opcode: u8) -> Result<()> {
-        todo!();
+        if let Some(program) = self.programs.get_mut(&self.program_id) {
+            program.exec(&mut self.ctx)?;
+        }
         Ok(())
     }
 
@@ -199,4 +202,17 @@ impl VirtualMachine {
     //     }
     //     f.close();
     // }
+}
+
+impl fmt::Debug for VirtualMachine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VirtualMachine")
+            .field("data_page_idx", &self.data_page_idx)
+            .field("data_page_offset", &self.data_page_offset)
+            .field("stack_ptr", &self.stack_ptr)
+            .field("goto_next_thread", &self.goto_next_thread)
+            .field("ctx", &self.ctx)
+            .field("program_id", &self.program_id)
+            .finish()
+    }
 }

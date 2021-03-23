@@ -16,7 +16,7 @@ pub(crate) struct Program {
     part_id: u16,
     code: Vec<u8>,
     active: bool,
-    instructions: Vec<(usize, Command)>,
+    instructions: Vec<(usize, Command, usize)>,
     addr_ip: HashMap<u16, usize>,
     ip: usize,
     return_stack: Vec<usize>, // max 64
@@ -65,7 +65,7 @@ impl Program {
 
             self.addr_ip.insert(ip as u16, self.instructions.len());
 
-            self.instructions.push((ip, cmd));
+            self.instructions.push((ip, cmd, slice_reader.ip() - ip));
         }
 
         // TODO: replace jump instructions offsets with ip offsets using addr_ip
@@ -85,7 +85,7 @@ impl Program {
 
         let mut run = true;
         while run {
-            let (addr, cmd) = &self.instructions[self.ip];
+            let (addr, cmd, _) = &self.instructions[self.ip];
 
             println!("{:04x}/{}: {:?}", self.ip, addr, cmd);
 
@@ -276,8 +276,12 @@ impl Program {
 
 impl fmt::Debug for Program {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (ip, cmd) in &self.instructions {
-            f.pad(&format!("{:05X}:\t  {:?}\n", ip, cmd))?;
+        for (ip, cmd, size) in &self.instructions {
+            let bytes: Vec<_> = self.code[*ip..*ip + *size]
+                .iter()
+                .map(|b| format!("{:02X}", b))
+                .collect();
+            f.pad(&format!("{:05X}:\t  {:?}\n# {}\n", ip, cmd, bytes.join("")))?;
         }
 
         Ok(())

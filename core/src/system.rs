@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::reference::Ref;
 
 pub const NUM_COLORS: usize = 16;
@@ -60,6 +62,12 @@ pub(crate) trait System {
     fn unlock_mutex(&mut self, mutex: &[u8]);
 
     fn get_offscreen_framebuffer(&mut self) -> Vec<u8>;
+}
+
+impl fmt::Debug for System {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        todo!()
+    }
 }
 
 pub(crate) struct MutexStack {
