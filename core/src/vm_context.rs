@@ -218,14 +218,13 @@ impl VmContext {
         // debug(DBG_VM, "VirtualMachine::op_blit_framebuffer(%d)", page_id);
         self.inp_handle_special_keys();
 
-        let sys = self.sys.get();
-
         //Nasty hack....was this present in the original assembly  ??!!
         if self.res.get().current_part_id() == GAME_PART_FIRST && self.variables[0x67] == 1 {
             self.variables[0xDC] = 0x21;
         }
 
         if !self.fast_mode {
+            let sys = self.sys.get();
             let delay = sys.get_timestamp() - self.last_time_stamp;
             let time_to_sleep = self.variables[VM_VARIABLE_PAUSE_SLICES] * 20 - delay as i16;
 
