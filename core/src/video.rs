@@ -4,7 +4,7 @@ use crate::serializer::*;
 use crate::staticres::*;
 use crate::system::*;
 use anyhow::Result;
-use std::cmp::Ordering;
+use std::{cmp::Ordering, num::Wrapping};
 
 struct StrEntry {
     id: u16,
@@ -226,7 +226,7 @@ impl Video {
         self.hliney = y1;
 
         let mut i = 0;
-        let mut j = (self.polygon.num_points - 1) as usize;
+        let mut j = (Wrapping(self.polygon.num_points) - Wrapping(1)).0 as usize;
 
         x2 = self.polygon.points[i].x + x1;
         x1 = self.polygon.points[j].x + x1;
@@ -369,7 +369,7 @@ impl Video {
 
     fn draw_char(&mut self, character: char, x: u16, y: u16, color: u8, idx: usize) {
         if x <= 39 && y <= 192 {
-            let font_off = ((character as u8 - b' ') * 8) as usize;
+            let font_off = (character as u8 - b' ') as usize * 8;
 
             let mut buf_off = (x * 4 + y * 160) as usize;
 

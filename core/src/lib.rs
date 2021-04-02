@@ -1,5 +1,4 @@
 #![allow(dead_code, incomplete_features, clippy::missing_const_for_fn)]
-#![feature(const_generics)]
 
 mod bank;
 mod command;

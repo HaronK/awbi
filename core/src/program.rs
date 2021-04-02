@@ -7,12 +7,13 @@ use crate::{
     vm_context::VmContext,
 };
 use anyhow::{anyhow, bail, Result};
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, num::Wrapping};
 
 const COLOR_BLACK: u8 = 0xFF;
 const DEFAULT_ZOOM: u16 = 0x0040;
 
 pub(crate) struct Program {
+    id: usize,
     part_id: u16,
     code: Vec<u8>,
     active: bool,
@@ -23,7 +24,7 @@ pub(crate) struct Program {
 }
 
 impl Program {
-    pub fn new(part_id: u16, mut code: Vec<u8>) -> Self {
+    pub fn new(id: usize, part_id: u16, mut code: Vec<u8>) -> Self {
         //printf("Jump : %X \n",_scriptPtr.pc-res->segBytecode);
         //FCS Whoever wrote this is patching the bytecode on the fly. This is ballzy !!
         if part_id == GAME_PART_FIRST {
@@ -42,6 +43,7 @@ impl Program {
         }
 
         Self {
+            id,
             part_id,
             code,
             instructions: Vec::new(),
@@ -52,23 +54,63 @@ impl Program {
         }
     }
 
+    /// Get a reference to the program's ip.
+    pub fn ip(&self) -> usize {
+        self.ip
+    }
+
+    /// Get an address of the current command.
+    pub fn addr(&self) -> usize {
+        self.instructions[self.ip].0
+    }
+
+    pub fn goto_addr(&mut self, addr: u16) -> Result<()> {
+        let oip = self.addr_ip.get(&addr);
+
+        if let Some(ip) = oip {
+            self.ip = *ip;
+            Ok(())
+        } else {
+            let addresses = self
+                .instructions
+                .iter()
+                .map(|(addr, _, _)| format!("{}", addr))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            print!(
+                "Cannot find command at address {}/0x{:04X}\nAvailable addresses: {}",
+                addr, addr, addresses
+            );
+            Err(anyhow!(
+                "Cannot find command at address {}/0x{:04X}",
+                addr,
+                addr
+            ))
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+
     pub fn parse(&mut self) -> Result<()> {
+        self.addr_ip.clear();
         self.instructions.clear();
 
         let mut slice_reader = SliceReader::new(&self.code);
         while slice_reader.can_read() {
-            let ip = slice_reader.ip();
+            let addr = slice_reader.addr();
             let opcode = slice_reader.read_u8();
             let cmd = Command::parse(opcode, &mut slice_reader)?;
 
             // println!("{:05X}: {:?}", ip, cmd);
 
-            self.addr_ip.insert(ip as u16, self.instructions.len());
+            self.addr_ip.insert(addr as u16, self.instructions.len());
 
-            self.instructions.push((ip, cmd, slice_reader.ip() - ip));
+            self.instructions
+                .push((addr, cmd, slice_reader.addr() - addr));
         }
-
-        // TODO: replace jump instructions offsets with ip offsets using addr_ip
 
         Ok(())
     }
@@ -79,15 +121,14 @@ impl Program {
     }
 
     pub fn exec(&mut self, ctx: &mut VmContext) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
+        // if !self.active {
+        //     return Ok(());
+        // }
 
-        let mut run = true;
-        while run {
+        while !ctx.goto_next_thread {
             let (addr, cmd, _) = &self.instructions[self.ip];
 
-            println!("{:04x}/{}: {:?}", self.ip, addr, cmd);
+            println!("{:04}/{:04X}: {:?}", self.ip, addr, cmd);
 
             match cmd {
                 Command::MovConst { var_id, val } => {
@@ -95,9 +136,19 @@ impl Program {
                 }
                 Command::Mov { dst_id, src_id } => {
                     ctx.variables[dst_id.0 as usize] = ctx.variables[src_id.0 as usize];
+                    println!("val={}", ctx.variables[dst_id.0 as usize]);
                 }
                 Command::Add { dst_id, src_id } => {
-                    ctx.variables[dst_id.0 as usize] += ctx.variables[src_id.0 as usize];
+                    print!(
+                        "{} + {} = ",
+                        ctx.variables[dst_id.0 as usize], ctx.variables[src_id.0 as usize]
+                    );
+                    let v = Wrapping(ctx.variables[dst_id.0 as usize])
+                        + Wrapping(ctx.variables[src_id.0 as usize]);
+
+                    ctx.variables[dst_id.0 as usize] = v.0;
+                    // ctx.variables[dst_id.0 as usize] += ctx.variables[src_id.0 as usize];
+                    println!("{}", ctx.variables[dst_id.0 as usize]);
                 }
                 Command::AddConst { var_id, val } => {
                     if self.part_id == 0x3E86 && self.ip == 0x6D48 {
@@ -114,21 +165,22 @@ impl Program {
                     ctx.variables[var_id.0 as usize] += *val as i16;
                 }
                 Command::Call { offset } => {
-                    self.return_stack.push(*addr as usize); // TODO: use ip instead
-                    self.ip = self.addr_ip[&(*addr as u16 + *offset)];
+                    self.return_stack.push(self.ip + 1); // TODO: use ip instead
+                    self.goto_addr(*offset)?;
+                    // self.ip = self.addr_ip[&(*addr as u16 + *offset)];
                     continue;
                 }
                 Command::Ret => {
-                    let ret_addr = self
+                    self.ip = self
                         .return_stack
                         .pop()
                         .ok_or_else(|| anyhow!("Stack underflow"))?; // TODO: use ip instead
-                    self.ip = self.addr_ip[&(ret_addr as u16)];
                     continue;
                 }
-                Command::PauseThread => run = false, // TODO: do we need to increase ip or can just return?
+                Command::PauseThread => ctx.goto_next_thread = true, // TODO: do we need to increase ip or can just return?
                 Command::Jmp { offset } => {
-                    self.ip = self.addr_ip[&(*addr as u16 + *offset)];
+                    self.goto_addr(*offset)?;
+                    // self.ip = self.addr_ip[&(*addr as u16 + *offset)];
                     continue;
                 }
                 Command::SetVect { thr_id, offset } => {
@@ -137,7 +189,8 @@ impl Program {
                 Command::Jnz { var_id, offset } => {
                     ctx.variables[var_id.0 as usize] -= 1;
                     if ctx.variables[var_id.0 as usize] != 0 {
-                        self.ip = self.addr_ip[&(*addr as u16 + *offset)];
+                        self.goto_addr(*offset)?;
+                        // self.ip = self.addr_ip[&(*addr as u16 + *offset)];
                         continue;
                     }
                 }
@@ -164,8 +217,12 @@ impl Program {
                     };
 
                     if cond {
-                        self.ip = self.addr_ip[&(*addr as u16 + *offset)];
+                        println!("{} ~ {} jmp", val1, val2);
+                        self.goto_addr(*offset)?;
+                        // self.ip = self.addr_ip[&(*addr as u16 + *offset)];
                         continue;
+                    } else {
+                        println!("{} ~ {}", val1, val2);
                     }
                 }
                 Command::SetPalette { pal_id } => {
@@ -205,8 +262,9 @@ impl Program {
                 ),
                 Command::BlitFramebuffer { page_id } => ctx.blit_framebuffer(*page_id as usize),
                 Command::KillThread => {
+                    // println!("KillThread: {}", self.id);
                     self.active = false;
-                    run = false; // TODO: do we need to increase ip or can just return?
+                    ctx.goto_next_thread = true; // TODO: do we need to increase ip or can just return?
                 }
                 Command::DrawString {
                     str_id,
@@ -217,7 +275,10 @@ impl Program {
                 Command::Sub { dst_id, src_id } => {
                     ctx.variables[dst_id.0 as usize] -= ctx.variables[src_id.0 as usize]
                 }
-                Command::And { var_id, val } => ctx.variables[var_id.0 as usize] &= *val as i16,
+                Command::And { var_id, val } => {
+                    ctx.variables[var_id.0 as usize] &= *val as i16;
+                    println!("val={}", ctx.variables[var_id.0 as usize]);
+                }
                 Command::Or { var_id, val } => ctx.variables[var_id.0 as usize] |= *val as i16,
                 Command::Shl { var_id, val } => ctx.variables[var_id.0 as usize] <<= *val,
                 Command::Shr { var_id, val } => ctx.variables[var_id.0 as usize] >>= *val,
@@ -307,6 +368,7 @@ mod tests {
 
         res.init()?;
 
+        let mut program_id = 0;
         for (i, me) in res
             .storage
             .mem_list
@@ -321,13 +383,15 @@ mod tests {
             );
 
             let data = me.read_bank();
-            let mut prog = Program::new(i as u16, data.into());
+            let mut prog = Program::new(program_id, i as u16, data.into());
 
             prog.parse()?;
 
             let file_name = format!("resource-0x{:02x}.asm", i);
             let mut file = File::create(proj_dir.join(file_name))?;
             file.write_all(format!("{:?}", prog).as_bytes())?;
+
+            program_id += 1;
         }
 
         Ok(())

@@ -61,6 +61,8 @@ pub(crate) struct VmContext {
     fast_mode: bool,
     last_time_stamp: u32,
 
+    pub goto_next_thread: bool,
+
     pub video: Video,
 
     pub variables: [i16; VM_NUM_VARIABLES],
@@ -81,6 +83,7 @@ impl VmContext {
             script_stack_calls: [0; VM_NUM_THREADS],
             fast_mode: false,
             last_time_stamp: 0,
+            goto_next_thread: false,
             video,
             variables: [0; VM_NUM_VARIABLES],
             threads_data: [Default::default(); VM_NUM_THREADS],
@@ -335,6 +338,7 @@ impl fmt::Debug for VmContext {
             )
             .field("fast_mode", &self.fast_mode)
             .field("last_time_stamp", &self.last_time_stamp)
+            .field("goto_next_thread", &self.goto_next_thread)
             .field(
                 "variables",
                 &self

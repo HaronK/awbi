@@ -20,8 +20,8 @@ impl fmt::Debug for OpType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::Var(addr) => f.pad(&format!("[{}]", var_name(addr))),
-            Self::Val1(val) => f.pad(&format!("0x{:02X}", val)),
-            Self::Val2(val) => f.pad(&format!("0x{:04X}", val)),
+            Self::Val1(val) => f.pad(&format!("{}", val)),
+            Self::Val2(val) => f.pad(&format!("{}", val)),
         }
     }
 }
@@ -439,13 +439,13 @@ impl Command {
 impl fmt::Debug for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MovConst { var_id, val } => f.pad(&format!("mov {:?}, 0x{:04X}", var_id, val)),
+            Self::MovConst { var_id, val } => f.pad(&format!("mov {:?}, {}", var_id, val)),
             Self::Mov { dst_id, src_id } => f.pad(&format!("mov {:?}, {:?}", dst_id, src_id)),
             Self::Add { dst_id, src_id } => f.pad(&format!("add {:?}, {:?}", dst_id, src_id)),
-            Self::AddConst { var_id, val } => f.pad(&format!("add {:?}, 0x{:04X}", var_id, val)),
+            Self::AddConst { var_id, val } => f.pad(&format!("add {:?}, {}", var_id, val)),
             Self::Call { offset } => f.pad(&format!("call 0x{:04X}", offset)),
             Self::Ret => f.pad("ret"),
-            Self::PauseThread => f.pad("break"),
+            Self::PauseThread => f.pad("pauseThread"),
             Self::Jmp { offset } => f.pad(&format!("jmp 0x{:04X}", offset)),
             Self::SetVect { thr_id, offset } => f.pad(&format!(
                 "setvec channel:0x{:02X}, address:0x{:04X}",
@@ -461,7 +461,7 @@ impl fmt::Debug for Command {
                 "{:?} {:?}, {:?}, 0x{:04X}",
                 jmp_type, var_id, op2, offset
             )),
-            Self::SetPalette { pal_id } => f.pad(&format!("setPalette 0x{:04X}", pal_id)),
+            Self::SetPalette { pal_id } => f.pad(&format!("setPalette {}", pal_id)),
             Self::ResetThread {
                 reset_type,
                 first,
@@ -470,31 +470,28 @@ impl fmt::Debug for Command {
                 "{:?} first:0x{:02X}, last:0x{:02X}",
                 reset_type, first, last
             )),
-            Self::SelectVideoPage { page_id } => {
-                f.pad(&format!("selectVideoPage 0x{:02X}", page_id))
+            Self::SelectVideoPage { page_id } => f.pad(&format!("selectVideoPage {}", page_id)),
+            Self::FillVideoPage { page_id, color } => {
+                f.pad(&format!("fillVideoPage {}, color:{}", page_id, color))
             }
-            Self::FillVideoPage { page_id, color } => f.pad(&format!(
-                "fillVideoPage 0x{:02X}, color:0x{:02X}",
-                page_id, color
-            )),
             Self::CopyVideoPage {
                 src_page_id,
                 dst_page_id,
             } => f.pad(&format!(
-                "copyVideoPage src:0x{:02X}, dst:0x{:02X}",
+                "copyVideoPage src:{}, dst:{}",
                 src_page_id, dst_page_id
             )),
             Self::BlitFramebuffer { page_id } => {
                 f.pad(&format!("blitFramebuffer 0x{:02X}", page_id))
             }
-            Self::KillThread => f.pad("killChannel"),
+            Self::KillThread => f.pad("killThread"),
             Self::DrawString {
                 str_id,
                 x,
                 y,
                 color,
             } => f.pad(&format!(
-                "text id:0x{:04X}, x:{}, y:{}, color:0x{:02X}\t;\"{}\"",
+                "drawString id:{}, x:{}, y:{}, color:{}\t;\"{}\"",
                 str_id,
                 x,
                 y,
@@ -502,26 +499,25 @@ impl fmt::Debug for Command {
                 STRINGS_TABLE_ENG.get(&(*str_id as u16)).unwrap_or(&"")
             )),
             Self::Sub { dst_id, src_id } => f.pad(&format!("sub {:?}, {:?}", dst_id, src_id)),
-            Self::And { var_id, val } => f.pad(&format!("and {:?}, 0x{:04X}", var_id, val)),
-            Self::Or { var_id, val } => f.pad(&format!("or {:?}, 0x{:04X}", var_id, val)),
-            Self::Shl { var_id, val } => f.pad(&format!("shl {:?}, 0x{:04X}", var_id, val)),
-            Self::Shr { var_id, val } => f.pad(&format!("shr {:?}, 0x{:04X}", var_id, val)),
+            Self::And { var_id, val } => f.pad(&format!("and {:?}, {}", var_id, val)),
+            Self::Or { var_id, val } => f.pad(&format!("or {:?}, {}", var_id, val)),
+            Self::Shl { var_id, val } => f.pad(&format!("shl {:?}, {}", var_id, val)),
+            Self::Shr { var_id, val } => f.pad(&format!("shr {:?}, {}", var_id, val)),
             Self::PlaySound {
                 res_id,
                 freq,
                 vol,
                 channel,
             } => f.pad(&format!(
-                "play id:0x{:04X}, freq:0x{:02X}, vol:0x{:02X}, channel:0x{:02X}",
+                "play id:{}, freq:{}, vol:{}, channel:{}",
                 res_id, freq, vol, channel
             )),
-            Self::UpdateMemList { res_id } => f.pad(&format!("load id:0x{:04X}", res_id)),
-            Self::PlayMusic { res_id, delay, pos } => f.pad(&format!(
-                "song id:0x{:04X}, delay:0x{:04X}, pos:0x{:02X}",
-                res_id, delay, pos
-            )),
+            Self::UpdateMemList { res_id } => f.pad(&format!("load id:{}", res_id)),
+            Self::PlayMusic { res_id, delay, pos } => {
+                f.pad(&format!("song id:{}, delay:{}, pos:{}", res_id, delay, pos))
+            }
             Self::Video1 { offset, x, y } => {
-                f.pad(&format!("video1: off=0x{:02X} x={} y={}", offset, x, y))
+                f.pad(&format!("video1: off={} x={} y={}", offset, x, y))
             }
             Self::Video2 {
                 cinematic: _,
@@ -530,7 +526,7 @@ impl fmt::Debug for Command {
                 y,
                 zoom,
             } => f.pad(&format!(
-                "video2: off=0x{:X} x={:?} y={:?} zoom:{:?}",
+                "video2: off={} x={:?} y={:?} zoom:{:?}",
                 offset, x, y, zoom
             )),
         }

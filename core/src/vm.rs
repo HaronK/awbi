@@ -16,7 +16,6 @@ pub(crate) struct VirtualMachine {
     data_page_idx: usize,
     data_page_offset: usize,
     stack_ptr: usize,
-    goto_next_thread: bool,
 
     ctx: VmContext,
     programs: HashMap<usize, Program>,
@@ -35,7 +34,6 @@ impl VirtualMachine {
             data_page_idx: code_idx,
             data_page_offset: 0,
             stack_ptr: 0,
-            goto_next_thread: false,
             ctx,
             programs: HashMap::new(),
             program_id: 0,
@@ -55,6 +53,7 @@ impl VirtualMachine {
 
         if self.programs.get(&self.program_id).is_none() {
             let mut program = Program::new(
+                self.program_id,
                 part_id,
                 self.res.get().get_entry_data(self.program_id).into(),
             );
@@ -75,7 +74,7 @@ impl VirtualMachine {
     /*
          This is called every frames in the infinite loop.
     */
-    #[trace]
+    // #[trace]
     pub fn check_thread_requests(&mut self) -> Result<()> {
         //Check if a part switch has been requested.
         let requested_next_part = self.res.get().requested_next_part;
@@ -102,8 +101,15 @@ impl VirtualMachine {
 
             let n = self.ctx.threads_data[thread_id].requested_pc_offset;
 
+            // println!(
+            //     "VirtualMachine::check_thread_requests() thr_id={} n={}",
+            //     thread_id, n
+            // );
             if n != VM_NO_SETVEC_REQUESTED {
-                println!("\tn={:#04x}", n);
+                println!(
+                    "VirtualMachine::check_thread_requests() thr_id={} n={}",
+                    thread_id, n
+                );
                 self.ctx.threads_data[thread_id].pc_offset =
                     if n == 0xFFFE { VM_INACTIVE_THREAD } else { n };
                 self.ctx.threads_data[thread_id].requested_pc_offset = VM_NO_SETVEC_REQUESTED;
@@ -113,7 +119,7 @@ impl VirtualMachine {
         Ok(())
     }
 
-    #[trace]
+    // #[trace]
     pub fn host_frame(&mut self) -> Result<()> {
         // Run the Virtual Machine for every active threads (one vm frame).
         // Inactive threads are marked with a thread instruction pointer set to 0xFFFF (VM_INACTIVE_THREAD).
@@ -121,34 +127,45 @@ impl VirtualMachine {
 
         for thread_id in 0..VM_NUM_THREADS {
             if !self.ctx.threads_data[thread_id].cur_state_active {
-                println!("\tVirtualMachine::host_frame(skip) thread_id={}", thread_id);
+                println!("VirtualMachine::host_frame(skip) thr_id={}", thread_id);
                 continue;
             }
 
-            println!("TEST");
+            // println!("TEST");
 
             let n = self.ctx.threads_data[thread_id].pc_offset;
 
             if n != VM_INACTIVE_THREAD {
+                let program = self.programs.get_mut(&self.program_id).unwrap();
+                program.goto_addr(n)?;
+
                 // Set the script pointer to the right location.
                 // script pc is used in execute_thread in order
                 // to get the next opcode.
                 self.data_page_offset = n as usize;
                 self.stack_ptr = 0;
 
-                println!(
-                    "\tVirtualMachine::host_frame() thread_id={} ip={}",
-                    thread_id, n
-                );
+                self.ctx.goto_next_thread = false;
+                println!("VirtualMachine::host_frame() thr_id={} n={}", thread_id, n);
                 self.execute_thread()?;
 
                 //Since .pc is going to be modified by this next loop iteration, we need to save it.
-                self.ctx.threads_data[thread_id].pc_offset = self.data_page_offset as u16;
+                let program = self.programs.get(&self.program_id).unwrap();
+                self.ctx.threads_data[thread_id].pc_offset = if program.is_active() {
+                    program.addr() as _
+                } else {
+                    VM_INACTIVE_THREAD
+                };
 
-                // debug(DBG_VM, "VirtualMachine::host_frame() i=0x%02X pos=0x%X", thread_id, self.threads_data[PC_OFFSET][thread_id]);
+                println!(
+                    "VirtualMachine::host_frame() thr_id={} pos={}",
+                    thread_id, self.ctx.threads_data[thread_id].pc_offset
+                );
                 if self.sys.get().input().quit {
                     break;
                 }
+            } else {
+                // println!("VirtualMachine::host_frame() thr_id={} n={}", thread_id, n);
             }
         }
 
@@ -157,25 +174,21 @@ impl VirtualMachine {
 
     #[trace]
     fn execute_thread(&mut self) -> Result<()> {
-        self.goto_next_thread = false;
-
-        while !self.goto_next_thread {
-            let opcode = 0;
-            println!("\topcode=0x{:02x}", opcode);
-
-            self.execute_opcode(opcode)?;
-        }
-
-        Ok(())
-    }
-
-    #[trace]
-    fn execute_opcode(&mut self, opcode: u8) -> Result<()> {
         if let Some(program) = self.programs.get_mut(&self.program_id) {
+            println!("TEST: {}-{}", self.program_id, program.is_active());
             program.exec(&mut self.ctx)?;
         }
+
         Ok(())
     }
+
+    // #[trace]
+    // fn execute_opcode(&mut self, opcode: u8) -> Result<()> {
+    //     if let Some(program) = self.programs.get_mut(&self.program_id) {
+    //         program.exec(&mut self.ctx)?;
+    //     }
+    //     Ok(())
+    // }
 
     // #[trace]
     pub fn inp_update_player(&mut self) {
@@ -210,8 +223,8 @@ impl fmt::Debug for VirtualMachine {
             .field("data_page_idx", &self.data_page_idx)
             .field("data_page_offset", &self.data_page_offset)
             .field("stack_ptr", &self.stack_ptr)
-            .field("goto_next_thread", &self.goto_next_thread)
             .field("ctx", &self.ctx)
+            .field("programs.len", &self.programs.len())
             .field("program_id", &self.program_id)
             .finish()
     }
