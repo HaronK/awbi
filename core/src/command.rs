@@ -1,5 +1,5 @@
-use crate::{slice_reader::SliceReader, staticres::*};
-use anyhow::{bail, ensure, Result};
+use crate::slice_reader::SliceReader;
+use anyhow::{bail, Result};
 use std::fmt;
 
 pub(crate) struct OpVar(pub u8);

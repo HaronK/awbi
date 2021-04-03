@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::{num::Wrapping, ops::Add, path::PathBuf};
+use std::{num::Wrapping, path::PathBuf};
 
 pub(crate) fn proj_dir() -> Result<PathBuf> {
     let mut dir = std::env::current_exe()?;

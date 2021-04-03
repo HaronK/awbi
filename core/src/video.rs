@@ -1,10 +1,10 @@
+use crate::file::File;
 use crate::system::*;
-use crate::{file::File, util::w_add_i16};
 use crate::{resource::*, util::w_sub};
 use crate::{serializer::*, util::w_add_u32};
 use crate::{staticres::*, util::w_mul_i16};
 use anyhow::Result;
-use std::{cmp::Ordering, num::Wrapping};
+use std::cmp::Ordering;
 
 struct StrEntry {
     id: u16,

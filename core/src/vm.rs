@@ -1,8 +1,7 @@
-use crate::{program::Program, resource::*, serializer::*, system::*, video::Video, vm_context::*};
+use crate::{program::Program, resource::*, serializer::*, system::*, vm_context::*};
 use anyhow::Result;
 
 use std::{collections::HashMap, fmt};
-use trace::trace;
 
 trace::init_depth_var!();
 

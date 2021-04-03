@@ -7,8 +7,8 @@ use crate::{
     video::Point,
     vm_context::VmContext,
 };
-use anyhow::{anyhow, bail, Result};
-use std::{collections::HashMap, fmt, num::Wrapping};
+use anyhow::{anyhow, Result};
+use std::{collections::HashMap, fmt};
 
 const COLOR_BLACK: u8 = 0xFF;
 const DEFAULT_ZOOM: u16 = 0x0040;

@@ -9,8 +9,6 @@ use crate::system::*;
 use crate::{storage::Storage, vm::*};
 use anyhow::{ensure, Result};
 
-use trace::trace;
-
 trace::init_depth_var!();
 
 const MAX_SAVE_SLOTS: i8 = 100;

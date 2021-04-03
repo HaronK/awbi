@@ -5,8 +5,6 @@ use crate::reference::*;
 use crate::{serializer::*, storage::Storage};
 use anyhow::{ensure, Result};
 
-use trace::trace;
-
 trace::init_depth_var!();
 
 const MEM_BLOCK_SIZE: usize = 600 * 1024; //600kb total memory consumed (not taking into account stack and static heap)

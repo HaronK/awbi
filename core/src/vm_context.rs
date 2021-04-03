@@ -1,14 +1,10 @@
-use std::{
-    fmt,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::fmt;
 
 use crate::{
     file::File, memlist::MemEntryState, mixer::*, parts::*, reference::Ref, resource::ResourceRef,
     serializer::*, sfxplayer::SfxPlayer, staticres::*, system::*, video::Video,
 };
 use anyhow::Result;
-use trace::trace;
 
 trace::init_depth_var!();
 

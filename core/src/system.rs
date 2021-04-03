@@ -64,8 +64,8 @@ pub(crate) trait System {
     fn get_offscreen_framebuffer(&mut self) -> Vec<u8>;
 }
 
-impl fmt::Debug for System {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl fmt::Debug for dyn System {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }
