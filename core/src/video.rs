@@ -1,8 +1,8 @@
-use crate::file::File;
-use crate::resource::*;
-use crate::serializer::*;
-use crate::staticres::*;
 use crate::system::*;
+use crate::{file::File, util::w_add_i16};
+use crate::{resource::*, util::w_sub};
+use crate::{serializer::*, util::w_add_u32};
+use crate::{staticres::*, util::w_mul_i16};
 use anyhow::Result;
 use std::{cmp::Ordering, num::Wrapping};
 
@@ -228,7 +228,7 @@ impl Video {
         self.hliney = y1;
 
         let mut i = 0;
-        let mut j = (Wrapping(self.polygon.num_points) - Wrapping(1)).0 as usize;
+        let mut j = w_sub(self.polygon.num_points, 1) as usize;
 
         x2 = self.polygon.points[i].x + x1;
         x1 = self.polygon.points[j].x + x1;
@@ -292,10 +292,8 @@ impl Video {
                         }
                     }
 
-                    let v = Wrapping(cpt1) + Wrapping(step1 as u32);
-                    cpt1 = v.0;
-                    let v = Wrapping(cpt2) + Wrapping(step2 as u32);
-                    cpt2 = v.0;
+                    cpt1 = w_add_u32(cpt1, step1 as _);
+                    cpt2 = w_add_u32(cpt2, step2 as _);
 
                     // cpt1 += step1 as u32;
                     // cpt2 += step2 as u32;
@@ -352,8 +350,8 @@ impl Video {
 
     fn calc_step(&self, p1: Point, p2: Point) -> (i16, usize) {
         let dy = (p2.y - p1.y) as usize;
-        let dx = Wrapping(p2.x - p1.x) * Wrapping(self.interp_table[dy] as i16) * Wrapping(4);
-        (dx.0, dy)
+        let dx = w_mul_i16(p2.x - p1.x, self.interp_table[dy] as i16) * 4;
+        (dx, dy)
     }
 
     pub(crate) fn draw_string(&mut self, color: u8, mut x: u16, mut y: u16, string_id: u16) {

@@ -3,6 +3,7 @@ use crate::{
     parts::GAME_PART_FIRST,
     slice_reader::SliceReader,
     staticres::*,
+    util::w_add_i16,
     video::Point,
     vm_context::VmContext,
 };
@@ -142,10 +143,10 @@ impl Program {
                     print!(" -> {}", ctx.variables[dst_id.0 as usize]);
                 }
                 Command::Add { dst_id, src_id } => {
-                    let v = Wrapping(ctx.variables[dst_id.0 as usize])
-                        + Wrapping(ctx.variables[src_id.0 as usize]);
-
-                    ctx.variables[dst_id.0 as usize] = v.0;
+                    ctx.variables[dst_id.0 as usize] = w_add_i16(
+                        ctx.variables[dst_id.0 as usize],
+                        ctx.variables[src_id.0 as usize],
+                    );
                     // ctx.variables[dst_id.0 as usize] += ctx.variables[src_id.0 as usize];
 
                     print!(" -> {}", ctx.variables[dst_id.0 as usize]);
@@ -162,7 +163,9 @@ impl Program {
                         ctx.play_sound(0x5B, 1, 64, 1);
                     }
 
-                    ctx.variables[var_id.0 as usize] += *val as i16;
+                    // ctx.variables[var_id.0 as usize] += *val as i16;
+                    ctx.variables[var_id.0 as usize] =
+                        w_add_i16(ctx.variables[var_id.0 as usize], *val as _);
 
                     print!(" -> {}", ctx.variables[var_id.0 as usize]);
                 }
