@@ -127,8 +127,10 @@ impl Program {
 
         while !ctx.goto_next_thread {
             let (addr, cmd, _) = &self.instructions[self.ip];
+            let mut ip_incr = 1;
 
-            println!("{:04}/{:04X}: {:?}", self.ip, addr, cmd);
+            // print!("{:04}/{:04X}: {:?}", self.ip, addr, cmd);
+            print!("{:04X}: {:?}", addr, cmd);
 
             match cmd {
                 Command::MovConst { var_id, val } => {
@@ -136,19 +138,16 @@ impl Program {
                 }
                 Command::Mov { dst_id, src_id } => {
                     ctx.variables[dst_id.0 as usize] = ctx.variables[src_id.0 as usize];
-                    println!("val={}", ctx.variables[dst_id.0 as usize]);
+                    print!(" -> {}", ctx.variables[dst_id.0 as usize]);
                 }
                 Command::Add { dst_id, src_id } => {
-                    print!(
-                        "{} + {} = ",
-                        ctx.variables[dst_id.0 as usize], ctx.variables[src_id.0 as usize]
-                    );
                     let v = Wrapping(ctx.variables[dst_id.0 as usize])
                         + Wrapping(ctx.variables[src_id.0 as usize]);
 
                     ctx.variables[dst_id.0 as usize] = v.0;
                     // ctx.variables[dst_id.0 as usize] += ctx.variables[src_id.0 as usize];
-                    println!("{}", ctx.variables[dst_id.0 as usize]);
+
+                    print!(" -> {}", ctx.variables[dst_id.0 as usize]);
                 }
                 Command::AddConst { var_id, val } => {
                     if self.part_id == 0x3E86 && self.ip == 0x6D48 {
@@ -163,25 +162,25 @@ impl Program {
                     }
 
                     ctx.variables[var_id.0 as usize] += *val as i16;
+
+                    print!(" -> {}", ctx.variables[var_id.0 as usize]);
                 }
                 Command::Call { offset } => {
                     self.return_stack.push(self.ip + 1); // TODO: use ip instead
                     self.goto_addr(*offset)?;
-                    // self.ip = self.addr_ip[&(*addr as u16 + *offset)];
-                    continue;
+                    ip_incr = 0;
                 }
                 Command::Ret => {
                     self.ip = self
                         .return_stack
                         .pop()
                         .ok_or_else(|| anyhow!("Stack underflow"))?; // TODO: use ip instead
-                    continue;
+                    ip_incr = 0;
                 }
                 Command::PauseThread => ctx.goto_next_thread = true, // TODO: do we need to increase ip or can just return?
                 Command::Jmp { offset } => {
                     self.goto_addr(*offset)?;
-                    // self.ip = self.addr_ip[&(*addr as u16 + *offset)];
-                    continue;
+                    ip_incr = 0;
                 }
                 Command::SetVect { thr_id, offset } => {
                     ctx.threads_data[*thr_id as usize].requested_pc_offset = *offset
@@ -190,8 +189,8 @@ impl Program {
                     ctx.variables[var_id.0 as usize] -= 1;
                     if ctx.variables[var_id.0 as usize] != 0 {
                         self.goto_addr(*offset)?;
-                        // self.ip = self.addr_ip[&(*addr as u16 + *offset)];
-                        continue;
+                        ip_incr = 0;
+                        print!(" jmp");
                     }
                 }
                 Command::CondJmp {
@@ -217,12 +216,11 @@ impl Program {
                     };
 
                     if cond {
-                        println!("{} ~ {} jmp", val1, val2);
+                        print!(" -> {} ~ {} jmp", val1, val2);
                         self.goto_addr(*offset)?;
-                        // self.ip = self.addr_ip[&(*addr as u16 + *offset)];
-                        continue;
+                        ip_incr = 0;
                     } else {
-                        println!("{} ~ {}", val1, val2);
+                        print!(" -> {} ~ {}", val1, val2);
                     }
                 }
                 Command::SetPalette { pal_id } => {
@@ -241,7 +239,6 @@ impl Program {
                     } else {
                         let state_active = *reset_type == ResetType::Unfreeze;
                         for i in *first..=*last {
-                            // TODO: fix magic numbers
                             ctx.threads_data[i as usize].requested_state_active = state_active;
                         }
                     }
@@ -262,9 +259,8 @@ impl Program {
                 ),
                 Command::BlitFramebuffer { page_id } => ctx.blit_framebuffer(*page_id as usize),
                 Command::KillThread => {
-                    // println!("KillThread: {}", self.id);
                     self.active = false;
-                    ctx.goto_next_thread = true; // TODO: do we need to increase ip or can just return?
+                    ctx.goto_next_thread = true;
                 }
                 Command::DrawString {
                     str_id,
@@ -277,7 +273,7 @@ impl Program {
                 }
                 Command::And { var_id, val } => {
                     ctx.variables[var_id.0 as usize] &= *val as i16;
-                    println!("val={}", ctx.variables[var_id.0 as usize]);
+                    print!(" -> {}", ctx.variables[var_id.0 as usize]);
                 }
                 Command::Or { var_id, val } => ctx.variables[var_id.0 as usize] |= *val as i16,
                 Command::Shl { var_id, val } => ctx.variables[var_id.0 as usize] <<= *val,
@@ -329,7 +325,9 @@ impl Program {
                 }
             }
 
-            self.ip += 1;
+            println!("");
+
+            self.ip += ip_incr;
         }
         Ok(())
     }

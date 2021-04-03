@@ -40,12 +40,12 @@ impl VirtualMachine {
         }
     }
 
-    #[trace]
+    // #[trace]
     pub fn init(&mut self) {
         self.ctx.init();
     }
 
-    #[trace]
+    // #[trace]
     pub fn init_for_part(&mut self, part_id: u16) -> Result<()> {
         self.ctx.init_for_part(part_id)?;
 
@@ -172,10 +172,10 @@ impl VirtualMachine {
         Ok(())
     }
 
-    #[trace]
+    // #[trace]
     fn execute_thread(&mut self) -> Result<()> {
         if let Some(program) = self.programs.get_mut(&self.program_id) {
-            println!("TEST: {}-{}", self.program_id, program.is_active());
+            // println!("TEST: {}-{}", self.program_id, program.is_active());
             program.exec(&mut self.ctx)?;
         }
 

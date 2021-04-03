@@ -91,6 +91,7 @@ pub(crate) struct Video {
 
     data_page_idx: usize,
     data_page_offset: usize,
+    data: Vec<u8>,
 
     pages_buf: [[u8; VID_PAGE_SIZE]; 4],
     mask: u8,
@@ -112,6 +113,7 @@ impl Video {
             interp_table: [0; 0x400],
             data_page_idx: 0,
             data_page_offset: 0,
+            data: vec![],
             pages_buf: [[0; VID_PAGE_SIZE]; 4],
             mask: 0,
         }
@@ -169,6 +171,7 @@ impl Video {
             self.res.get().seg_video2_idx()
         };
 
+        self.data = self.res.get().get_entry_data(self.data_page_idx).into();
         self.data_page_offset = offset;
     }
 
@@ -190,11 +193,10 @@ impl Video {
 
             // pc is misleading here since we are not reading bytecode but only
             // vertices information.
-            // self.polygon.read_vertices(_pData.pc, zoom); // TODO:
+            self.polygon
+                .read_vertices(&self.data[self.data_page_offset..], zoom); // TODO:
 
             self.fill_polygon(color, zoom, pt);
-
-            todo!();
         } else {
             i &= 0x3F; //0x3F = 63
             if i == 1 {
@@ -289,8 +291,14 @@ impl Video {
                             }
                         }
                     }
-                    cpt1 += step1 as u32;
-                    cpt2 += step2 as u32;
+
+                    let v = Wrapping(cpt1) + Wrapping(step1 as u32);
+                    cpt1 = v.0;
+                    let v = Wrapping(cpt2) + Wrapping(step2 as u32);
+                    cpt2 = v.0;
+
+                    // cpt1 += step1 as u32;
+                    // cpt2 += step2 as u32;
                     self.hliney += 1;
                     if self.hliney > 199 {
                         return;
@@ -344,7 +352,8 @@ impl Video {
 
     fn calc_step(&self, p1: Point, p2: Point) -> (i16, usize) {
         let dy = (p2.y - p1.y) as usize;
-        ((p2.x - p1.x) * (self.interp_table[dy] as i16) * 4, dy)
+        let dx = Wrapping(p2.x - p1.x) * Wrapping(self.interp_table[dy] as i16) * Wrapping(4);
+        (dx.0, dy)
     }
 
     pub(crate) fn draw_string(&mut self, color: u8, mut x: u16, mut y: u16, string_id: u16) {

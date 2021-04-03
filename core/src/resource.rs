@@ -191,12 +191,12 @@ impl Resource {
 
     // Read all entries from memlist.bin. Do not load anything in memory,
     // this is just a fast way to access the data later based on their id.
-    #[trace]
+    // #[trace]
     pub fn init(&mut self) -> Result<()> {
         self.storage.load()
     }
 
-    #[trace]
+    // #[trace]
     fn load_marked_as_needed(&mut self) -> Result<()> {
         loop {
             if let Some(me) = &mut self.storage.get_max_rank_entry_to_load() {
@@ -235,13 +235,13 @@ impl Resource {
         Ok(())
     }
 
-    #[trace]
+    // #[trace]
     pub fn invalidate_res(&mut self) {
         self.storage.mem_list.invalidate_res();
         self.data.script_cur_off = self.data.script_bak_off;
     }
 
-    #[trace]
+    // #[trace]
     fn invalidate_all(&mut self) {
         self.storage.mem_list.invalidate_all();
         self.data.script_cur_off = 0;
@@ -254,7 +254,7 @@ impl Resource {
 
     // This is decided based on the resourceId. If it does not match a mementry id it is supposed to
     // be a part id.
-    #[trace]
+    // #[trace]
     pub fn load_parts_or_mem_entry(&mut self, resource_id: u16) -> Result<()> {
         if resource_id as usize > self.storage.mem_list.entries.len() {
             self.requested_next_part = Some(resource_id);
@@ -273,7 +273,7 @@ impl Resource {
     // so _memList[video2Index] is never loaded for those parts of the game. When
     // needed (for action phrases) _memList[video2Index] is always loaded with 0x11
     // (as seen in memListParts).
-    #[trace]
+    // #[trace]
     pub fn setup_part(&mut self, part_id: u16) -> Result<()> {
         if part_id == self.data.current_part_id {
             return Ok(());
@@ -345,7 +345,7 @@ impl Resource {
         Ok(())
     }
 
-    #[trace]
+    // #[trace]
     pub fn reset_mem_block(&mut self) {
         self.mem_buf = [0; MEM_BLOCK_SIZE]; // TODO: faster cleanup?
         self.data.script_bak_off = 0;

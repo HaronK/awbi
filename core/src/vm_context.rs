@@ -94,7 +94,7 @@ impl VmContext {
         self.fast_mode = !self.fast_mode;
     }
 
-    #[trace]
+    // #[trace]
     pub fn init(&mut self) {
         self.video.init();
         self.player.init();
@@ -102,16 +102,17 @@ impl VmContext {
 
         self.variables = [0; VM_NUM_VARIABLES];
         self.variables[0x54] = 0x81;
-        self.variables[VM_VARIABLE_RANDOM_SEED] = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Cannot get current time")
-            .as_secs() as i16;
+        self.variables[VM_VARIABLE_RANDOM_SEED] = 1;
+        // SystemTime::now()
+        //     .duration_since(UNIX_EPOCH)
+        //     .expect("Cannot get current time")
+        //     .as_secs() as i16;
 
         self.fast_mode = false;
         // self.player.mark_var = &self.vm_variables[VM_VARIABLE_MUS_MARK]; // TODO: uncomment
     }
 
-    #[trace]
+    // #[trace]
     pub fn init_for_part(&mut self, part_id: u16) -> Result<()> {
         self.player.stop();
         self.mixer.get_mut().stop_all();

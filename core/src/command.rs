@@ -448,10 +448,10 @@ impl fmt::Debug for Command {
             Self::PauseThread => f.pad("pauseThread"),
             Self::Jmp { offset } => f.pad(&format!("jmp 0x{:04X}", offset)),
             Self::SetVect { thr_id, offset } => f.pad(&format!(
-                "setvec channel:0x{:02X}, address:0x{:04X}",
+                "setvec channel:{}, address:0x{:04X}",
                 thr_id, offset
             )),
-            Self::Jnz { var_id, offset } => f.pad(&format!("djnz {:?}, 0x{:04X}", var_id, offset)),
+            Self::Jnz { var_id, offset } => f.pad(&format!("jnz {:?}, 0x{:04X}", var_id, offset)),
             Self::CondJmp {
                 jmp_type,
                 var_id,
@@ -466,10 +466,7 @@ impl fmt::Debug for Command {
                 reset_type,
                 first,
                 last,
-            } => f.pad(&format!(
-                "{:?} first:0x{:02X}, last:0x{:02X}",
-                reset_type, first, last
-            )),
+            } => f.pad(&format!("{:?}, first:{}, last:{}", reset_type, first, last)),
             Self::SelectVideoPage { page_id } => f.pad(&format!("selectVideoPage {}", page_id)),
             Self::FillVideoPage { page_id, color } => {
                 f.pad(&format!("fillVideoPage {}, color:{}", page_id, color))
@@ -481,9 +478,7 @@ impl fmt::Debug for Command {
                 "copyVideoPage src:{}, dst:{}",
                 src_page_id, dst_page_id
             )),
-            Self::BlitFramebuffer { page_id } => {
-                f.pad(&format!("blitFramebuffer 0x{:02X}", page_id))
-            }
+            Self::BlitFramebuffer { page_id } => f.pad(&format!("blitFramebuffer {}", page_id)),
             Self::KillThread => f.pad("killThread"),
             Self::DrawString {
                 str_id,

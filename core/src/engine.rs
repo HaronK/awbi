@@ -45,7 +45,7 @@ impl Engine {
         self.sys.get().input().quit
     }
 
-    #[trace]
+    // #[trace]
     fn init(&mut self) -> Result<()> {
         //Init system
         self.sys.get_mut().init("Out Of This World");
@@ -70,7 +70,7 @@ impl Engine {
         Ok(())
     }
 
-    #[trace]
+    // #[trace]
     fn run(&mut self) -> Result<()> {
         while !self.is_quit() {
             self.vm.check_thread_requests()?;
@@ -244,7 +244,7 @@ mod tests {
         let mut engine = Engine::new(sys, data_dir.to_str().unwrap(), data_dir.to_str().unwrap());
 
         engine.init()?;
-        println!("=== Engine State ===\n{:#?}=== Engine State ===", engine);
+        // println!("=== Engine State ===\n{:#?}=== Engine State ===", engine);
         engine.run()
     }
 }
