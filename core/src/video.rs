@@ -1,5 +1,5 @@
-use crate::file::File;
 use crate::system::*;
+use crate::{file::File, slice_reader::SliceReader};
 use crate::{resource::*, util::w_sub};
 use crate::{serializer::*, util::w_add_u32};
 use crate::{staticres::*, util::w_mul_i16};
@@ -42,18 +42,16 @@ impl Polygon {
         }
     }
 
-    fn read_vertices(&mut self, buf: &[u8], zoom: u16) {
-        self.bbw = buf[0] as u16 * zoom / 64;
-        self.bbh = buf[1] as u16 * zoom / 64;
-        self.num_points = buf[2];
-        let mut off = 3;
-        // assert((numPoints & 1) == 0 && numPoints < MAX_POINTS);
+    fn read_vertices(&mut self, buf: &mut SliceReader, zoom: u16) {
+        self.bbw = buf.read_u8() as u16 * zoom / 64;
+        self.bbh = buf.read_u8() as u16 * zoom / 64;
+        self.num_points = buf.read_u8();
+        assert!((self.num_points & 1) == 0 && (self.num_points as usize) < MAX_POINTS);
 
         //Read all points, directly from bytecode segment
         for pt in &mut self.points[0..self.num_points as usize] {
-            pt.x = (buf[off] as u16 * zoom / 64) as i16;
-            pt.y = (buf[off + 1] as u16 * zoom / 64) as i16;
-            off += 2;
+            pt.x = (buf.read_u8() as u16 * zoom / 64) as i16;
+            pt.y = (buf.read_u8() as u16 * zoom / 64) as i16;
         }
     }
 }
@@ -90,8 +88,7 @@ pub(crate) struct Video {
     interp_table: [u16; 0x400],
 
     data_page_idx: usize,
-    data_page_offset: usize,
-    data: Vec<u8>,
+    data: SliceReader,
 
     pages_buf: [[u8; VID_PAGE_SIZE]; 4],
     mask: u8,
@@ -112,8 +109,7 @@ impl Video {
             hliney: 0,
             interp_table: [0; 0x400],
             data_page_idx: 0,
-            data_page_offset: 0,
-            data: vec![],
+            data: Default::default(),
             pages_buf: [[0; VID_PAGE_SIZE]; 4],
             mask: 0,
         }
@@ -146,24 +142,6 @@ impl Video {
         }
     }
 
-    fn fetch_data_u8(&mut self) -> u8 {
-        let res = self
-            .res
-            .get()
-            .from_mem_u8(self.data_page_idx, self.data_page_offset);
-        self.data_page_offset += 1;
-        res
-    }
-
-    fn fetch_data_u16(&mut self) -> u16 {
-        let res = self
-            .res
-            .get()
-            .from_mem_be_u16(self.data_page_idx, self.data_page_offset);
-        self.data_page_offset += 2;
-        res
-    }
-
     pub(crate) fn set_data_page(&mut self, cinematic: bool, offset: usize) {
         self.data_page_idx = if cinematic {
             self.res.get().seg_cinematic_idx()
@@ -171,8 +149,8 @@ impl Video {
             self.res.get().seg_video2_idx()
         };
 
-        self.data = self.res.get().get_entry_data(self.data_page_idx).into();
-        self.data_page_offset = offset;
+        self.data = SliceReader::new(self.res.get().get_entry_data(self.data_page_idx).into());
+        self.data.set_pos(offset);
     }
 
     // A shape can be given in two different ways:
@@ -181,7 +159,7 @@ impl Video {
 
     // 	This is a recursive function.
     pub(crate) fn read_and_draw_polygon(&mut self, mut color: u8, zoom: u16, pt: Point) {
-        let mut i = self.fetch_data_u8();
+        let mut i = self.data.read_u8();
 
         // 0xc0 = 192
         if i >= 0xC0 {
@@ -193,18 +171,21 @@ impl Video {
 
             // pc is misleading here since we are not reading bytecode but only
             // vertices information.
-            self.polygon
-                .read_vertices(&self.data[self.data_page_offset..], zoom); // TODO:
+            let old_pos = self.data.pos();
+
+            self.polygon.read_vertices(&mut self.data, zoom);
+
+            self.data.set_pos(old_pos);
 
             self.fill_polygon(color, zoom, pt);
         } else {
             i &= 0x3F; //0x3F = 63
             if i == 1 {
-                // warning("Video::readAndDrawPolygon() ec=0x%X (i != 2)", 0xF80);
+                println!("Video::read_and_draw_polygon() ec=0xF80 (i != 2)");
             } else if i == 2 {
                 self.read_and_draw_polygon_hierarchy(zoom, pt);
             } else {
-                // warning("Video::readAndDrawPolygon() ec=0x%X (i != 2)", 0xFBB);
+                println!("Video::read_and_draw_polygon() ec=0xFBB (i != 2)");
             }
         }
     }
@@ -228,7 +209,8 @@ impl Video {
         self.hliney = y1;
 
         let mut i = 0;
-        let mut j = w_sub(self.polygon.num_points, 1) as usize;
+        // let mut j = w_sub(self.polygon.num_points, 1) as usize;
+        let mut j = (self.polygon.num_points - 1) as usize;
 
         x2 = self.polygon.points[i].x + x1;
         x1 = self.polygon.points[j].x + x1;
@@ -317,40 +299,40 @@ impl Video {
     // What is read from the bytecode is not a pure screen space polygon but a polygon space polygon.
     fn read_and_draw_polygon_hierarchy(&mut self, zoom: u16, pgc: Point) {
         let mut pt = pgc;
-        pt.x -= (self.fetch_data_u8() as u16 * zoom / 64) as i16;
-        pt.y -= (self.fetch_data_u8() as u16 * zoom / 64) as i16;
+        pt.x -= (self.data.read_u8() as u16 * zoom / 64) as i16;
+        pt.y -= (self.data.read_u8() as u16 * zoom / 64) as i16;
 
-        let children = self.fetch_data_u8() as u16;
+        let children = self.data.read_u8();
         // debug(DBG_VIDEO, "Video::readAndDrawPolygonHierarchy childs=%d", childs);
 
         for _ in 0..children {
-            let mut off = self.fetch_data_u16();
+            let mut off = self.data.read_u16();
             let mut po = pt;
 
-            po.x += (self.fetch_data_u8() as u16 * zoom / 64) as i16;
-            po.y += (self.fetch_data_u8() as u16 * zoom / 64) as i16;
+            po.x += (self.data.read_u8() as u16 * zoom / 64) as i16;
+            po.y += (self.data.read_u8() as u16 * zoom / 64) as i16;
 
             let mut color = 0xFF;
-            let _bp = off;
+            let bp = off;
             off &= 0x7FFF;
 
-            if _bp & 0x8000 != 0 {
-                color = self.fetch_data_u8() & 0x7F;
-                self.data_page_offset += 1;
+            if bp & 0x8000 != 0 {
+                color = self.data.read_u8() & 0x7F;
+                self.data.read_u8();
             }
 
-            let bak = self.data_page_offset;
-            self.data_page_offset = (off * 2) as usize;
+            let old_pos = self.data.pos();
+            self.data.set_pos((off * 2) as usize);
 
             self.read_and_draw_polygon(color, zoom, po);
 
-            self.data_page_offset = bak;
+            self.data.set_pos(old_pos);
         }
     }
 
     fn calc_step(&self, p1: Point, p2: Point) -> (i16, usize) {
         let dy = (p2.y - p1.y) as usize;
-        let dx = w_mul_i16(p2.x - p1.x, self.interp_table[dy] as i16) * 4;
+        let dx = w_mul_i16(w_mul_i16(p2.x - p1.x, self.interp_table[dy] as i16), 4);
         (dx, dy)
     }
 
@@ -466,7 +448,7 @@ impl Video {
         if cmaske != 0 {
             self.pages_buf[self.cur_page_idx1][off] =
                 (self.pages_buf[self.cur_page_idx1][off] & cmaske) | 0x80;
-            off += 1;
+            // off += 1;
         }
     }
 
@@ -504,7 +486,7 @@ impl Video {
         if cmaske != 0 {
             self.pages_buf[self.cur_page_idx1][off] =
                 (self.pages_buf[self.cur_page_idx1][off] & cmaske) | (colb & 0xF0);
-            off += 1;
+            // off += 1;
         }
     }
 
@@ -543,7 +525,7 @@ impl Video {
             self.pages_buf[self.cur_page_idx1][off] = (self.pages_buf[self.cur_page_idx1][off]
                 & cmaske)
                 | (self.pages_buf[0][off] & 0xF0);
-            off += 1;
+            // off += 1;
         }
     }
 
@@ -605,7 +587,7 @@ impl Video {
 
             self.pages_buf[q] = self.pages_buf[p];
         } else {
-            let mut p = self.get_page_off(src_page_id & 3);
+            let mut p = self.get_page_off(src_mask & 3);
 
             if vscroll >= -199 && vscroll <= 199 {
                 let mut h = 200;
@@ -639,14 +621,14 @@ impl Video {
         // #endif
     }
 
-    fn copy_page_data(&mut self, _src: &[u8]) {
+    fn copy_page_data(&mut self, src: &mut [u8]) {
         // debug(DBG_VIDEO, "Video::copyPagePtr()");
         let mut src_idx = 0;
         let mut dst_idx = 0;
 
         for _ in 0..200 {
             for _ in 0..40 {
-                let mut p = [
+                let p = [
                     src_idx + 8000 * 3,
                     src_idx + 8000 * 2,
                     src_idx + 8000 * 1,
@@ -656,8 +638,8 @@ impl Video {
                     let mut acc = 0;
                     for i in 0..8 {
                         acc <<= 1;
-                        acc |= if (p[i & 3] & 0x80) != 0 { 1 } else { 0 };
-                        p[i & 3] <<= 1;
+                        acc |= if (src[p[i] & 3] & 0x80) != 0 { 1 } else { 0 };
+                        src[p[i] & 3] <<= 1;
                     }
 
                     self.pages_buf[0][dst_idx] = acc;

@@ -1,37 +1,41 @@
-pub struct SliceReader<'a> {
-    addr: usize,
-    data: &'a [u8],
+#[derive(Default)]
+pub struct SliceReader {
+    pos: usize,
+    data: Vec<u8>,
 }
 
-impl<'a> SliceReader<'a> {
-    pub fn new(data: &'a [u8]) -> Self {
-        Self { addr: 0, data }
+impl SliceReader {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self { pos: 0, data }
     }
 
     pub fn can_read(&self) -> bool {
-        self.addr < self.data.len()
+        self.pos < self.data.len()
     }
 
-    /// Get a reference to the slice reader's ip.
-    pub fn addr(&self) -> usize {
-        self.addr
+    pub fn pos(&self) -> usize {
+        self.pos
     }
 
-    // pub fn dec_addr(&mut self, val: usize) {
-    //     self.addr -= val;
-    // }
+    pub fn set_pos(&mut self, pos: usize) {
+        self.pos = pos;
+    }
+
+    pub fn get_slice(&self, start: usize, end: usize) -> &[u8] {
+        &self.data[start..end]
+    }
 
     #[inline]
     pub fn read_u8(&mut self) -> u8 {
-        let addr = self.addr;
-        self.addr += 1;
+        let addr = self.pos;
+        self.pos += 1;
         self.data[addr]
     }
 
     #[inline]
     pub fn read_u16(&mut self) -> u16 {
-        let addr = self.addr;
-        self.addr += 2;
+        let addr = self.pos;
+        self.pos += 2;
         u16::from_be_bytes([self.data[addr], self.data[addr + 1]])
     }
 }

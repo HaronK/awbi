@@ -16,7 +16,7 @@ const DEFAULT_ZOOM: u16 = 0x0040;
 pub(crate) struct Program {
     id: usize,
     part_id: u16,
-    code: Vec<u8>,
+    code: SliceReader,
     active: bool,
     instructions: Vec<(usize, Command, usize)>,
     addr_ip: HashMap<u16, usize>,
@@ -46,7 +46,7 @@ impl Program {
         Self {
             id,
             part_id,
-            code,
+            code: SliceReader::new(code),
             instructions: Vec::new(),
             addr_ip: HashMap::new(),
             ip: 0,
@@ -100,18 +100,16 @@ impl Program {
         self.addr_ip.clear();
         self.instructions.clear();
 
-        let mut slice_reader = SliceReader::new(&self.code);
-        while slice_reader.can_read() {
-            let addr = slice_reader.addr();
-            let opcode = slice_reader.read_u8();
-            let cmd = Command::parse(opcode, &mut slice_reader)?;
+        while self.code.can_read() {
+            let addr = self.code.pos();
+            let opcode = self.code.read_u8();
+            let cmd = Command::parse(opcode, &mut self.code)?;
 
             // println!("{:05X}: {:?}", ip, cmd);
 
             self.addr_ip.insert(addr as u16, self.instructions.len());
 
-            self.instructions
-                .push((addr, cmd, slice_reader.addr() - addr));
+            self.instructions.push((addr, cmd, self.code.pos() - addr));
         }
 
         Ok(())
@@ -340,7 +338,9 @@ impl Program {
 impl fmt::Debug for Program {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (ip, cmd, size) in &self.instructions {
-            let bytes: Vec<_> = self.code[*ip..*ip + *size]
+            let bytes: Vec<_> = self
+                .code
+                .get_slice(*ip, *ip + *size)
                 .iter()
                 .map(|b| format!("{:02X}", b))
                 .collect();
