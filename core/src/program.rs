@@ -69,6 +69,7 @@ impl Program {
 
         if let Some(ip) = oip {
             self.ip = *ip;
+            self.active = true;
             Ok(())
         } else {
             let addresses = self
