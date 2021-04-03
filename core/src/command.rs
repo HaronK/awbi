@@ -98,11 +98,12 @@ impl fmt::Debug for ResetType {
 }
 
 fn var_name(id: u8) -> String {
-    if let Some(name) = VARIABLE_NAME_BY_INDEX.get(&(id as usize)) {
-        name.to_string()
-    } else {
-        format!("0x{:02X}", id)
-    }
+    format!("0x{:02X}", id)
+    // if let Some(name) = VARIABLE_NAME_BY_INDEX.get(&(id as usize)) {
+    //     name.to_string()
+    // } else {
+    //     format!("0x{:02X}", id)
+    // }
 }
 
 pub(crate) enum Command {
@@ -486,13 +487,17 @@ impl fmt::Debug for Command {
                 y,
                 color,
             } => f.pad(&format!(
-                "drawString id:{}, x:{}, y:{}, color:{}\t;\"{}\"",
-                str_id,
-                x,
-                y,
-                color,
-                STRINGS_TABLE_ENG.get(&(*str_id as u16)).unwrap_or(&"")
+                "drawString id:{}, x:{}, y:{}, color:{}",
+                str_id, x, y, color
             )),
+            // f.pad(&format!(
+            //     "drawString id:{}, x:{}, y:{}, color:{}  \"{}\"",
+            //     str_id,
+            //     x,
+            //     y,
+            //     color,
+            //     STRINGS_TABLE_ENG.get(&(*str_id as u16)).unwrap_or(&"")
+            // )),
             Self::Sub { dst_id, src_id } => f.pad(&format!("sub {:?}, {:?}", dst_id, src_id)),
             Self::And { var_id, val } => f.pad(&format!("and {:?}, {}", var_id, val)),
             Self::Or { var_id, val } => f.pad(&format!("or {:?}, {}", var_id, val)),
