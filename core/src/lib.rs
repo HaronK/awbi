@@ -2,20 +2,20 @@
 
 mod bank;
 mod command;
-mod engine;
+pub mod engine;
 mod file;
 mod memlist;
 mod mixer;
 mod parts;
 mod program;
-mod reference;
+pub mod reference;
 mod resource;
 mod serializer;
 mod sfxplayer;
 mod slice_reader;
 mod staticres;
 mod storage;
-mod system;
+pub mod system;
 mod util;
 mod video;
 mod vm;

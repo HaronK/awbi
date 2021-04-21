@@ -14,7 +14,7 @@ trace::init_depth_var!();
 const MAX_SAVE_SLOTS: i8 = 100;
 const FORMAT_SIG: u32 = 1_096_242_006; // 'AWSV'
 
-pub(crate) struct Engine {
+pub struct Engine {
     sys: SystemRef,
     vm: VirtualMachine,
     res: ResourceRef,
@@ -24,7 +24,7 @@ pub(crate) struct Engine {
 }
 
 impl Engine {
-    fn new(sys: SystemRef, data_dir: &str, save_dir: &str) -> Self {
+    pub fn new(sys: SystemRef, data_dir: &str, save_dir: &str) -> Self {
         let storage = Storage::new(data_dir);
         let res = Ref::new(Box::new(Resource::new(storage)));
         let vm = VirtualMachine::new(res.clone(), sys.clone());
@@ -44,7 +44,7 @@ impl Engine {
     }
 
     // #[trace]
-    fn init(&mut self) -> Result<()> {
+    pub fn init(&mut self) -> Result<()> {
         //Init system
         self.sys.get_mut().init("Out Of This World");
         self.res.get_mut().init()?;
@@ -69,7 +69,7 @@ impl Engine {
     }
 
     // #[trace]
-    fn run(&mut self) -> Result<()> {
+    pub fn run(&mut self) -> Result<()> {
         while !self.is_quit() {
             self.vm.check_thread_requests()?;
             self.vm.inp_update_player();

@@ -11,7 +11,7 @@ pub const DIR_UP: u8 = 1 << 2;
 pub const DIR_DOWN: u8 = 1 << 3;
 
 #[derive(Default)]
-pub(crate) struct PlayerInput {
+pub struct PlayerInput {
     pub dir_mask: u8,
     pub button: bool,
     pub code: bool,
@@ -39,7 +39,7 @@ pub(crate) type SystemRef = Ref<Box<dyn System>>;
 /*
     System is an abstract class so any find of system can be plugged underneath.
 */
-pub(crate) trait System {
+pub trait System {
     // typedef void (*AudioCallback)(void *param, uint8_t *stream, int len);
     // typedef uint32_t (*TimerCallback)(uint32_t delay, void *param);
 
