@@ -260,9 +260,9 @@ impl VmContext {
             self.mixer.get_mut().stop_channel(channel);
         } else {
             let mut mc = MixerChunk {
-                data: (me.buf_offset + 8) as u32, // skip header
-                len: 0,                           //self.fetch_data_u16() * 2,
-                loop_len: 0,                      //self.fetch_data_u16() * 2,
+                data: me.to_slice_end(8).into(), // skip header
+                len: 0,                          //self.fetch_data_u16() * 2,
+                loop_len: 0,                     //self.fetch_data_u16() * 2,
                 ..Default::default()
             };
             if mc.loop_len != 0 {

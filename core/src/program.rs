@@ -46,7 +46,7 @@ impl Program {
         Self {
             id,
             part_id,
-            code: SliceReader::new(code),
+            code: code.into(),
             instructions: Vec::new(),
             addr_ip: HashMap::new(),
             ip: 0,

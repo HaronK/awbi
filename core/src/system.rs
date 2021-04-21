@@ -25,7 +25,14 @@ pub(crate) struct PlayerInput {
 }
 
 pub type AudioCallback = dyn FnMut(usize) -> Vec<u8>;
-pub type TimerCallback = dyn FnMut(u32) -> u32;
+
+pub trait TimerHandler {
+    fn handle(&mut self) -> u32;
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct TimerId(usize);
+pub type TimerCallback = dyn FnMut(u32, &mut Box<dyn TimerHandler>) -> u32;
 
 pub(crate) type SystemRef = Ref<Box<dyn System>>;
 
@@ -53,8 +60,8 @@ pub(crate) trait System {
     fn stop_audio(&mut self);
     fn get_output_sample_rate(&mut self) -> u32;
 
-    fn add_timer(&mut self, delay: u32, callback: &TimerCallback) -> Vec<u8>;
-    fn remove_timer(&mut self, timer_id: &[u8]);
+    fn add_timer(&mut self, delay: u32, callback: &TimerCallback) -> TimerId;
+    fn remove_timer(&mut self, timer_id: TimerId);
 
     fn create_mutex(&mut self) -> Vec<u8>;
     fn destroy_mutex(&mut self, mutex: &[u8]);

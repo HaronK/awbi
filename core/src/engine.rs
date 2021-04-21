@@ -214,11 +214,11 @@ mod tests {
             22050 // sound sample rate
         }
 
-        fn add_timer(&mut self, _delay: u32, _callback: &TimerCallback) -> Vec<u8> {
-            vec![]
+        fn add_timer(&mut self, _delay: u32, _callback: &TimerCallback) -> TimerId {
+            TimerId::default()
         }
 
-        fn remove_timer(&mut self, _timer_id: &[u8]) {}
+        fn remove_timer(&mut self, _timer_id: TimerId) {}
 
         fn create_mutex(&mut self) -> Vec<u8> {
             vec![]

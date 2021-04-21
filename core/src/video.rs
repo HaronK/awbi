@@ -149,7 +149,7 @@ impl Video {
             self.res.get().seg_video2_idx()
         };
 
-        self.data = SliceReader::new(self.res.get().get_entry_data(self.data_page_idx).into());
+        self.data = self.res.get().get_entry_data(self.data_page_idx).into();
         self.data.set_pos(offset);
     }
 

@@ -6,7 +6,7 @@ use anyhow::Result;
 
 #[derive(Default)]
 pub(crate) struct MixerChunk {
-    pub data: u32,
+    pub data: Vec<u8>,
     pub len: u16,
     pub loop_pos: u16,
     pub loop_len: u16,
@@ -198,8 +198,8 @@ impl Mixer {
                 };
 
                 // interpolate
-                let b1 = get_byte(ch.chunk.data, p1) as u32;
-                let b2 = get_byte(ch.chunk.data, p2) as u32;
+                let b1 = ch.chunk.data[p1] as u32; //get_byte(ch.chunk.data, p1) as u32;
+                let b2 = ch.chunk.data[p2] as u32; //get_byte(ch.chunk.data, p2) as u32;
                 let ilc = ch.chunk_pos & 0xFF;
                 let b = ((b1 * (0xFF - ilc) + b2 * ilc) >> 8) * (ch.volume as u32) / 0x40; //0x40=64
 

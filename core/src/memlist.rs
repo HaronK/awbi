@@ -88,6 +88,10 @@ impl MemEntry {
         &self.buffer[offset..offset + size]
     }
 
+    pub fn to_slice_end(&self, offset: usize) -> &[u8] {
+        &self.buffer[offset..]
+    }
+
     pub fn from_slice(&mut self, src: &[u8], offset: usize) {
         self.buffer[offset../*offset + src.len()*/].clone_from_slice(src);
     }
