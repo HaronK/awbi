@@ -202,7 +202,9 @@ mod tests {
         fn destroy(&mut self) {}
         fn set_palette(&mut self, _s: u8, _n: u8, _buf: &[u8]) {}
         fn copy_rect(&mut self, _x: u16, _y: u16, _w: u16, _h: u16, _buf: &[u8], _pitch: u32) {}
-        fn process_events(&mut self) {}
+        fn process_events(&mut self) -> Result<()> {
+            Ok(())
+        }
         fn sleep(&self, _duration: u32) {}
 
         fn get_timestamp(&self) -> u32 {

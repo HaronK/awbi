@@ -3,7 +3,7 @@ use awbi_core::system::{PlayerInput, System, TimerId, *};
 use sdl2::{
     event::Event,
     keyboard::{Keycode, Mod},
-    pixels::{PixelFormatEnum, PixelMasks},
+    pixels::PixelFormatEnum,
     surface::Surface,
     Sdl,
 };

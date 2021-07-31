@@ -1,6 +1,6 @@
+use crate::resource::*;
 use crate::system::*;
 use crate::{file::File, slice_reader::SliceReader};
-use crate::{resource::*, util::w_sub};
 use crate::{serializer::*, util::w_add_u32};
 use crate::{staticres::*, util::w_mul_i16};
 use anyhow::Result;

@@ -169,7 +169,8 @@ impl Program {
                 }
                 Command::Call { offset } => {
                     self.return_stack.push(self.ip + 1); // TODO: use ip instead
-                    self.goto_addr(*offset)?;
+                    let off = *offset;
+                    self.goto_addr(off)?;
                     ip_incr = 0;
                 }
                 Command::Ret => {
@@ -181,7 +182,8 @@ impl Program {
                 }
                 Command::PauseThread => ctx.goto_next_thread = true, // TODO: do we need to increase ip or can just return?
                 Command::Jmp { offset } => {
-                    self.goto_addr(*offset)?;
+                    let off = *offset;
+                    self.goto_addr(off)?;
                     ip_incr = 0;
                 }
                 Command::SetVect { thr_id, offset } => {
@@ -190,7 +192,8 @@ impl Program {
                 Command::Jnz { var_id, offset } => {
                     ctx.variables[var_id.0 as usize] -= 1;
                     if ctx.variables[var_id.0 as usize] != 0 {
-                        self.goto_addr(*offset)?;
+                        let off = *offset;
+                        self.goto_addr(off)?;
                         ip_incr = 0;
                         print!(" jmp");
                     }
@@ -219,7 +222,8 @@ impl Program {
 
                     if cond {
                         print!(" -> {} ~ {} jmp", val1, val2);
-                        self.goto_addr(*offset)?;
+                        let off = *offset;
+                        self.goto_addr(off)?;
                         ip_incr = 0;
                     } else {
                         print!(" -> {} ~ {}", val1, val2);
