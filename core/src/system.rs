@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::fmt;
 
 use crate::reference::Ref;
@@ -46,13 +47,13 @@ pub trait System {
     fn input(&self) -> &PlayerInput;
     fn input_mut(&mut self) -> &mut PlayerInput;
 
-    fn init(&mut self, title: &str);
+    fn init(&mut self, title: &str) -> Result<()>;
     fn destroy(&mut self);
 
     fn set_palette(&mut self, s: u8, n: u8, buf: &[u8]);
     fn copy_rect(&mut self, x: u16, y: u16, w: u16, h: u16, buf: &[u8], pitch: u32);
 
-    fn process_events(&mut self);
+    fn process_events(&mut self) -> Result<()>;
     fn sleep(&self, duration: u32);
     fn get_timestamp(&self) -> u32;
 

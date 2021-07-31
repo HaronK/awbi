@@ -190,8 +190,8 @@ impl VirtualMachine {
     // }
 
     // #[trace]
-    pub fn inp_update_player(&mut self) {
-        self.ctx.inp_update_player();
+    pub fn inp_update_player(&mut self) -> Result<()> {
+        self.ctx.inp_update_player()
     }
 
     pub fn save_or_load(&mut self, ser: &mut Serializer) -> Result<()> {

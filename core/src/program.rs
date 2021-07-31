@@ -259,7 +259,7 @@ impl Program {
                     *dst_page_id as usize,
                     ctx.variables[VM_VARIABLE_SCROLL_Y],
                 ),
-                Command::BlitFramebuffer { page_id } => ctx.blit_framebuffer(*page_id as usize),
+                Command::BlitFramebuffer { page_id } => ctx.blit_framebuffer(*page_id as usize)?,
                 Command::KillThread => {
                     self.active = false;
                     ctx.goto_next_thread = true;

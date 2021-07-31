@@ -27,7 +27,7 @@ fn data_dir() -> Result<PathBuf> {
 
 fn main() -> Result<()> {
     let data_dir = data_dir()?;
-    let sys: Ref<Box<(dyn System)>> = Ref::new(Box::new(SdlSystem::default()));
+    let sys: Ref<Box<(dyn System)>> = Ref::new(Box::new(SdlSystem::new()?));
     let mut engine = Engine::new(sys, data_dir.to_str().unwrap(), data_dir.to_str().unwrap());
 
     engine.init()?;

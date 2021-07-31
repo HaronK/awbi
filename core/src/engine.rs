@@ -46,7 +46,7 @@ impl Engine {
     // #[trace]
     pub fn init(&mut self) -> Result<()> {
         //Init system
-        self.sys.get_mut().init("Out Of This World");
+        self.sys.get_mut().init("Out Of This World")?;
         self.res.get_mut().init()?;
         self.res.get_mut().reset_mem_block();
         self.vm.init();
@@ -72,7 +72,7 @@ impl Engine {
     pub fn run(&mut self) -> Result<()> {
         while !self.is_quit() {
             self.vm.check_thread_requests()?;
-            self.vm.inp_update_player();
+            self.vm.inp_update_player()?;
             self.process_input()?;
             self.vm.host_frame()?;
         }
@@ -196,7 +196,9 @@ mod tests {
             &mut self.input
         }
 
-        fn init(&mut self, _title: &str) {}
+        fn init(&mut self, _title: &str) -> Result<()> {
+            Ok(())
+        }
         fn destroy(&mut self) {}
         fn set_palette(&mut self, _s: u8, _n: u8, _buf: &[u8]) {}
         fn copy_rect(&mut self, _x: u16, _y: u16, _w: u16, _h: u16, _buf: &[u8], _pitch: u32) {}

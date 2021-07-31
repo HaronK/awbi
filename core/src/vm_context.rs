@@ -126,10 +126,10 @@ impl VmContext {
         Ok(())
     }
 
-    pub fn inp_update_player(&mut self) {
+    pub fn inp_update_player(&mut self) -> Result<()> {
         let mut sys = self.sys.get_mut();
 
-        sys.process_events();
+        sys.process_events()?;
 
         if self.res.get().current_part_id() == GAME_PART10 {
             let c = sys.input().last_char;
@@ -182,9 +182,11 @@ impl VmContext {
 
         self.variables[VM_VARIABLE_HERO_ACTION] = button;
         self.variables[VM_VARIABLE_HERO_ACTION_POS_MASK] = m;
+
+        Ok(())
     }
 
-    pub fn inp_handle_special_keys(&mut self) {
+    pub fn inp_handle_special_keys(&mut self) -> Result<()> {
         let mut sys = self.sys.get_mut();
         let mut res = self.res.get_mut();
 
@@ -193,7 +195,7 @@ impl VmContext {
                 sys.input_mut().pause = false;
 
                 while !sys.input().pause {
-                    sys.process_events();
+                    sys.process_events()?;
                     sys.sleep(200);
                 }
             }
@@ -212,11 +214,13 @@ impl VmContext {
         // if self.vm_variables[0xC9] == 1 {
         //     warning("VirtualMachine::inp_handle_special_keys() unhandled case (self.vm_variables[0xC9] == 1)");
         // }
+
+        Ok(())
     }
 
-    pub fn blit_framebuffer(&mut self, page_id: usize) {
+    pub fn blit_framebuffer(&mut self, page_id: usize) -> Result<()> {
         // debug(DBG_VM, "VirtualMachine::op_blit_framebuffer(%d)", page_id);
-        self.inp_handle_special_keys();
+        self.inp_handle_special_keys()?;
 
         //Nasty hack....was this present in the original assembly  ??!!
         if self.res.get().current_part_id() == GAME_PART_FIRST && self.variables[0x67] == 1 {
@@ -245,6 +249,8 @@ impl VmContext {
         self.variables[0xF7] = 0;
 
         self.video.update_display(page_id);
+
+        Ok(())
     }
 
     pub fn play_sound(&mut self, res_id: u16, freq: u8, vol: u8, channel: u8) {
